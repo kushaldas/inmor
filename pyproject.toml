@@ -1,0 +1,21 @@
+[build-system]
+requires = ["flit_core >=3.11,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "pyinmor"
+authors = [{name = "Kushal Das", email = "kushal@sunet.se"}]
+dynamic = ["version", "description"]
+license = { file="LICENSE" }
+
+dependencies = [
+	"jwcrypto",
+	"httpx",
+	"redis"
+]
+
+[project.scripts]
+inmor_add_sub = "pyinmor:add_sub_main"
+
+[project.urls]
+Home = "https://github.com/kushaldas/pyinmor"
