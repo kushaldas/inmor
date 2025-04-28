@@ -173,6 +173,7 @@ async fn main() -> io::Result<()> {
             .service(index)
             .service(openid_federation)
             .service(list_subordinates)
+            .service(fetch_subordinates)
             .wrap(middleware::NormalizePath::trim())
             .wrap(middleware::Logger::default())
     })

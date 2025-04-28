@@ -7,9 +7,6 @@ use std::fmt::format;
 use actix_web::{
     App, HttpRequest, HttpResponse, HttpServer, Responder, error, get, middleware, web,
 };
-use serde::Deserialize;
-use serde::Serialize;
-
 use josekit::{
     JoseError,
     jwk::{Jwk, JwkSet},
@@ -17,7 +14,10 @@ use josekit::{
     jws::{JwsAlgorithm, JwsHeader, JwsVerifier, RS256},
     jwt::{self, JwtPayload},
 };
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::{Map, Value, json};
+use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
 lazy_static! {
@@ -110,6 +110,38 @@ pub fn compile_entityid(
     Ok(jwt)
 }
 
+/// https://openid.net/specs/openid-federation-1_0.html#name-fetch-subordinate-statement-
+/// This will try to fetch a given subordinate's statement from the TA/I
+#[get("/fetch")]
+pub async fn fetch_subordinates(
+    req: HttpRequest,
+    redis: web::Data<redis::Client>,
+) -> actix_web::Result<impl Responder> {
+    let params = match web::Query::<HashMap<String, String>>::from_query(req.query_string()) {
+        Ok(data) => data,
+        Err(_) => return Err(error::ErrorBadRequest("Missing params")),
+    };
+    let sub = match params.get("sub") {
+        Some(data) => data,
+        None => return Err(error::ErrorInternalServerError("Missing sub parameter")),
+    };
+
+    // After we have the query
+    let mut conn = redis
+        .get_connection_manager()
+        .await
+        .map_err(error::ErrorInternalServerError)?;
+
+    let res = redis::Cmd::hget("inmor:subordinates", sub)
+        .query_async::<String>(&mut conn)
+        .await
+        .map_err(error::ErrorInternalServerError)?;
+
+    Ok(HttpResponse::Ok()
+        .content_type("application/entity-statement+jwt")
+        .body(res))
+}
+
 /// FIXME: as an example.
 /// This function will add a new sub-ordinate entity to
 /// a Trust Anchor or intermediate.
@@ -124,6 +156,6 @@ pub fn add_subordinate(entity_id: &str) {
         let data = resp.text().unwrap();
         let verifier = UnverifiedToken::new();
         let (payload, header) = jwt::decode_with_verifier(&data, &verifier).unwrap();
-        println!("{}", payload);
+        println!("{}", header);
     }
 }
