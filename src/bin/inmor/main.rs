@@ -1,4 +1,5 @@
 #![allow(unused)]
+
 use lazy_static::lazy_static;
 use redis::Client;
 use std::fmt::format;
@@ -174,6 +175,7 @@ async fn main() -> io::Result<()> {
             .service(openid_federation)
             .service(list_subordinates)
             .service(fetch_subordinates)
+            .service(resolve_entity)
             .wrap(middleware::NormalizePath::trim())
             .wrap(middleware::Logger::default())
     })
