@@ -11,7 +11,7 @@ use josekit::{
     JoseError,
     jwk::{Jwk, JwkSet},
     jws::alg::rsassa::RsassaJwsAlgorithm,
-    jws::{JwsAlgorithm, JwsHeader, JwsVerifier, RS256},
+    jws::{ES512, JwsAlgorithm, JwsHeader, JwsVerifier, RS256},
     jwt::{self, JwtPayload},
 };
 use serde::Deserialize;
@@ -142,6 +142,34 @@ pub async fn fetch_subordinates(
         .body(res))
 }
 
+/// This function will self veify the JWT and returns
+/// the payload and header after verification.
+pub fn self_verify_jwt(data: &str) -> (JwtPayload, JwsHeader) {
+    let verifier = UnverifiedToken::new();
+    let (payload, header) = jwt::decode_with_verifier(&data, &verifier).unwrap();
+
+    // FIXME: veify it exits
+    let kid = header.key_id().unwrap();
+    let jwks_data = payload.claim("jwks").unwrap();
+    println!("{:?}", header);
+    let keys = jwks_data.get("keys").unwrap();
+    let mut internal_map: Map<String, Value> = Map::new();
+    internal_map.insert("keys".to_string(), keys.clone());
+    let jwks = JwkSet::from_map(internal_map).unwrap();
+    // Let us find the key used to sign the JWT
+    let key = jwks.get(kid)[0];
+    // FIXME: We need different verifiers for different kinds of
+    // JWK.
+    let boxed_verifier: Box<dyn JwsVerifier> = match header.algorithm().unwrap() {
+        "RS256" => Box::new(RS256.verifier_from_jwk(&key).unwrap()),
+        // FIXME: This has to be fixed for all different keys
+        _ => Box::new(ES512.verifier_from_jwk(&key).unwrap()),
+    };
+    let verifier = &*boxed_verifier;
+    let (payload, header) = jwt::decode_with_verifier(&data, verifier).unwrap();
+    (payload, header)
+}
+
 /// FIXME: as an example.
 /// This function will add a new sub-ordinate entity to
 /// a Trust Anchor or intermediate.
@@ -154,8 +182,7 @@ pub fn add_subordinate(entity_id: &str) {
 
         // Means we have some result back
         let data = resp.text().unwrap();
-        let verifier = UnverifiedToken::new();
-        let (payload, header) = jwt::decode_with_verifier(&data, &verifier).unwrap();
-        println!("{}", header);
+        // FIXME: this will fail now if error as no error handling
+        self_verify_jwt(&data);
     }
 }
