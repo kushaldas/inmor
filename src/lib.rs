@@ -184,20 +184,7 @@ pub fn verify_jwt_with_jwks(data: &str, keys: Option<JwkSet>) -> (JwtPayload, Jw
 pub fn self_verify_jwt(data: &str) -> (JwtPayload, JwsHeader) {
     let (payload, header) = get_unverified_payload_header(data);
     let jwks = get_jwks_from_payload(&payload);
-    // FIXME: veify it exits
-    let kid = header.key_id().unwrap();
-    // Let us find the key used to sign the JWT
-    let key = jwks.get(kid)[0];
-    // FIXME: We need different verifiers for different kinds of
-    // JWK.
-    let boxed_verifier: Box<dyn JwsVerifier> = match header.algorithm().unwrap() {
-        "RS256" => Box::new(RS256.verifier_from_jwk(&key).unwrap()),
-        "PS256" => Box::new(PS256.verifier_from_jwk(&key).unwrap()),
-        // FIXME: This has to be fixed for all different keys
-        _ => Box::new(ES512.verifier_from_jwk(&key).unwrap()),
-    };
-    let verifier = &*boxed_verifier;
-    let (payload, header) = jwt::decode_with_verifier(&data, verifier).unwrap();
+    let (payload, header) = verify_jwt_with_jwks(data, Some(jwks));
     (payload, header)
 }
 
