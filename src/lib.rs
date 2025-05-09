@@ -19,6 +19,7 @@ use josekit::{
     jwt::{self, JwtPayload},
     util,
 };
+use oidfed_metadata_policy::*;
 use serde::Serialize;
 use serde::{Deserialize, de::Error};
 use serde_json::{Map, Value, json};
@@ -37,6 +38,27 @@ pub struct ResolveParams {
     sub: String,
     #[serde(rename = "trust_anchor")]
     trust_anchors: Vec<String>,
+}
+
+/// To store each JWT and verified payload from it
+/// This will be used to return the final result
+#[derive(Debug)]
+pub struct VerifiedJWT {
+    jwt: String,
+    payload: JwtPayload,
+    substatement: bool,
+    taresult: bool,
+}
+
+impl VerifiedJWT {
+    pub fn new(jwt: String, payload: &JwtPayload, subs: bool, taresult: bool) -> Self {
+        VerifiedJWT {
+            jwt,
+            payload: payload.clone(),
+            substatement: subs,
+            taresult,
+        }
+    }
 }
 
 pub fn compile_entityid(
@@ -192,8 +214,11 @@ pub async fn resolve_entity_to_trustanchor(
     sub: &str,
     trust_anchors: Vec<&str>,
     start: bool,
-) -> Vec<String> {
+) -> Vec<VerifiedJWT> {
     eprintln!("\nReceived {} with trust anchors {:?}", sub, trust_anchors);
+
+    let empty_authority: Vec<String> = Vec::new();
+    let eal = json!(empty_authority);
 
     // This will hold the list of trust chain
     let mut result = Vec::new();
@@ -205,13 +230,19 @@ pub async fn resolve_entity_to_trustanchor(
     // Add it already visited
     visited.insert(sub.to_string(), true);
 
-    if start == true {
-        result.push(original_ec.clone());
-    }
-
     let (opayload, oheader) = self_verify_jwt(&original_ec);
+
+    if start == true {
+        let vjwt = VerifiedJWT::new(original_ec, &opayload, false, false);
+        result.push(vjwt);
+    }
     // Now find the authority_hints
-    let authority_hints = opayload.claim("authority_hints").unwrap();
+    let authority_hints = match opayload.claim("authority_hints") {
+        Some(v) => v,
+        // Means we are at one Trust anchor (most probably)
+        None => &eal,
+    };
+    println!("\nAuthority hints: {:?}\n", authority_hints);
     // Loop over the authority hints
     for ah in authority_hints.as_array().unwrap() {
         // Flag to mark if we found the trust anchor
@@ -247,20 +278,34 @@ pub async fn resolve_entity_to_trustanchor(
         // FIXME: In future if the above fails, then we should move to the next authority
         if ta_flag == true {
             // Means this is the end of resolving
-            result.push(sub_statement);
-            result.push(ah_jwt.clone());
+            let vjwt = VerifiedJWT::new(sub_statement, &subs_payload, true, false);
+            result.push(vjwt);
+            let ajwt = VerifiedJWT::new(ah_jwt.clone(), &ah_payload, false, true);
+            result.push(ajwt);
             return result;
         } else {
-            result.push(sub_statement);
             // Now do a recursive query
-            result.extend(
-                Box::pin(resolve_entity_to_trustanchor(
-                    ah_entity,
-                    trust_anchors,
-                    false,
-                ))
-                .await,
-            );
+            let r_result = Box::pin(resolve_entity_to_trustanchor(
+                ah_entity,
+                trust_anchors.clone(),
+                false,
+            ))
+            .await;
+            if r_result.is_empty() {
+                continue;
+            } else {
+                let vjwt = VerifiedJWT::new(sub_statement, &subs_payload, true, false);
+                result.push(vjwt);
+                result.extend(r_result);
+            }
+            //result.extend(
+            //Box::pin(resolve_entity_to_trustanchor(
+            //ah_entity,
+            //trust_anchors,
+            //false,
+            //))
+            //.await,
+            //);
             return result;
         }
     }
@@ -273,12 +318,101 @@ pub async fn resolve_entity(
     info: Query<ResolveParams>,
     redis: web::Data<redis::Client>,
 ) -> actix_web::Result<impl Responder> {
+    let mut found_ta = false;
     let ResolveParams { sub, trust_anchors } = info.into_inner();
     let tas: Vec<&str> = trust_anchors.iter().map(|s| s as &str).collect();
     // Now loop over the trust_anchors
     let result = resolve_entity_to_trustanchor(&sub, tas, true).await;
-    for res in result.iter() {
-        println!("\n{}\n", res);
+
+    // Verify that the result is not empty and we actually found a TA
+    if result.is_empty() {
+        return Ok("failed");
+    }
+    if result.iter().any(|i| i.taresult == true) {
+        // Means we found our trust anchor
+        found_ta = true;
+    }
+    if !found_ta {
+        return Ok("We could not find TA");
+    }
+
+    let mut mpolicy: Option<Map<String, Value>> = None;
+    // We need to skip the top one (the trust anchor's entity configuration)
+    for res in result.iter().rev().skip(1) {
+        println!("\n{:?}\n", res.payload);
+        mpolicy = match mpolicy {
+            // This is when we have some policy the higher subordinate statement
+            Some(val) => {
+                // But we should only apply claim from subordinate statements
+                if res.substatement {
+                    let new_policy = res.payload.claim("metadata_policy");
+                    match new_policy {
+                        Some(p) => {
+                            let temp_val = json!(val);
+                            // Uncomment these to learn about metadata policy merging
+                            //println!("\n Calling with {:?}\n\n{:?}\n\n\n", &temp_val, p);
+                            let merged = merge_policies(&temp_val, p);
+                            match merged {
+                                Ok(policy) => Some(policy),
+                                Err(_) => return Ok("error in merging"),
+                            }
+                        }
+                        None => Some(val),
+                    }
+                } else {
+                    // Means the final entity statement
+                    // We should now apply the merged policy at val to the metadata claim
+                    let metadata = res.payload.claim("metadata").unwrap().as_object().unwrap();
+                    eprintln!("\nFinal policy: {:?}\n\n{:?}\n\n", &val, metadata);
+                    // If the particular key of metadata exists in policy, then only we apply the
+                    // policy on the metata
+                    for (mkey, mvalue) in metadata.iter() {
+                        // Check for the key
+                        if val.contains_key(mkey) {
+                            // Now we need that particular policy and actual metadata for that
+                            // part.
+                            let mpolicy = val.get(mkey).unwrap().as_object().unwrap();
+                            let result =
+                                resolve_metadata_policy(mpolicy, mvalue.as_object().unwrap());
+                            if result.is_err() {
+                                return Ok(
+                                    "received error in applying metadata policy on metadata",
+                                );
+                            }
+                        }
+                    }
+                    println!("Succesfully applied metadata policy on metadata");
+                    println!("{:?}\n", &val);
+
+                    // No error, all good.
+                    Some(val)
+                }
+            }
+
+            // Means first time getting a metadata policy.
+            // We should store it properly in mpolicy
+            None => {
+                // We should only get it from a subordinate statement
+                if res.substatement {
+                    let new_policy = res.payload.claim("metadata_policy");
+                    match new_policy {
+                        Some(p) => {
+                            let data = p.as_object().unwrap().clone();
+                            Some(data)
+                        }
+                        // Even the subordinate statement does not have any policy
+                        None => None,
+                    }
+                } else {
+                    // Not a subordinate statement
+                    // Means an entity statement
+                    // Means no policy and only statement, nothing to verify against
+                    None
+                }
+            }
+        };
+        // HACK:
+        //println!("\n{:?}\n", res.payload)
     }
     Ok("hello")
 }

@@ -1253,6 +1253,7 @@ dependencies = [
  "josekit",
  "lazy_static",
  "log",
+ "oidfed_metadata_policy",
  "redis",
  "reqwest",
  "serde",
@@ -1512,6 +1513,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62948e14d923ea95ea2c7c86c71013138b66525b86bdc08d2dcc262bdb497b87"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "oidfed_metadata_policy"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdd164bf2307ba16568a106eb73b3c979ad4186e66d9b890618ebb2dac790b41"
+dependencies = [
+ "anyhow",
+ "env_logger",
+ "log",
+ "serde_json",
 ]
 
 [[package]]
