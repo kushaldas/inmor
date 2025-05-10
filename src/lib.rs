@@ -1,4 +1,6 @@
 #![allow(unused)]
+use anyhow::{Result, bail};
+
 use lazy_static::lazy_static;
 use log::debug;
 use redis::Client;
@@ -226,7 +228,10 @@ pub async fn resolve_entity_to_trustanchor(
     // to stop infinite loop
     let mut visited: HashMap<String, bool> = HashMap::new();
     // First get the entity configuration and self verify
-    let original_ec = get_entity_configruation_as_jwt(&sub).await;
+    let original_ec = match get_entity_configruation_as_jwt(&sub).await {
+        Ok(res) => res,
+        Err(_) => return result,
+    };
     // Add it already visited
     visited.insert(sub.to_string(), true);
 
@@ -259,7 +264,11 @@ pub async fn resolve_entity_to_trustanchor(
             ta_flag = true;
         }
         // Fetch the authority's entity configuration
-        let ah_jwt = get_entity_configruation_as_jwt(ah_entity).await;
+        let ah_jwt = match get_entity_configruation_as_jwt(ah_entity).await {
+            Ok(res) => res,
+            Err(_) => return result,
+        };
+
         // Verify and get the payload
         let (ah_payload, _) = self_verify_jwt(&ah_jwt);
         // Now find the fetch endpoint
@@ -271,7 +280,10 @@ pub async fn resolve_entity_to_trustanchor(
             .unwrap();
         // Fetch the entity statement/ subordinate statement
         let sub_statement =
-            fetch_subordinate_statement(fetch_endpoint.as_str().unwrap(), &sub).await;
+            match fetch_subordinate_statement(fetch_endpoint.as_str().unwrap(), &sub).await {
+                Ok(res) => res,
+                Err(_) => return result,
+            };
         // Get the authority's JWKS and then verify the subordinate statement against them.
         let ah_jwks = get_jwks_from_payload(&ah_payload);
         let (subs_payload, _) = verify_jwt_with_jwks(&sub_statement, Some(ah_jwks));
@@ -317,7 +329,7 @@ pub async fn resolve_entity_to_trustanchor(
 pub async fn resolve_entity(
     info: Query<ResolveParams>,
     redis: web::Data<redis::Client>,
-) -> actix_web::Result<impl Responder> {
+) -> actix_web::Result<HttpResponse> {
     let mut found_ta = false;
     let ResolveParams { sub, trust_anchors } = info.into_inner();
     let tas: Vec<&str> = trust_anchors.iter().map(|s| s as &str).collect();
@@ -326,14 +338,14 @@ pub async fn resolve_entity(
 
     // Verify that the result is not empty and we actually found a TA
     if result.is_empty() {
-        return Ok("failed");
+        return error_response("Failed to find trust chain");
     }
     if result.iter().any(|i| i.taresult == true) {
         // Means we found our trust anchor
         found_ta = true;
     }
     if !found_ta {
-        return Ok("We could not find TA");
+        return error_response("Failed to find trust chain");
     }
 
     let mut mpolicy: Option<Map<String, Value>> = None;
@@ -354,7 +366,9 @@ pub async fn resolve_entity(
                             let merged = merge_policies(&temp_val, p);
                             match merged {
                                 Ok(policy) => Some(policy),
-                                Err(_) => return Ok("error in merging"),
+                                Err(_) => {
+                                    return error_response("Failed in merging metadata policy");
+                                }
                             }
                         }
                         None => Some(val),
@@ -375,7 +389,7 @@ pub async fn resolve_entity(
                             let result =
                                 resolve_metadata_policy(mpolicy, mvalue.as_object().unwrap());
                             if result.is_err() {
-                                return Ok(
+                                return error_response(
                                     "received error in applying metadata policy on metadata",
                                 );
                             }
@@ -414,33 +428,43 @@ pub async fn resolve_entity(
         // HACK:
         //println!("\n{:?}\n", res.payload)
     }
-    Ok("hello")
+    Ok(HttpResponse::Ok().body("hello"))
 }
 
 /// Fetches the subordinate statement from authority
-pub async fn fetch_subordinate_statement(fetch_url: &str, entity_id: &str) -> String {
+pub async fn fetch_subordinate_statement(fetch_url: &str, entity_id: &str) -> Result<String> {
     let url = format!("{}?sub={}", fetch_url, entity_id);
     debug!("FETCH {}", url);
     return get_query(&url).await;
 }
 
 /// Get the entity configuration for a given entity_id
-pub async fn get_entity_configruation_as_jwt(entity_id: &str) -> String {
+pub async fn get_entity_configruation_as_jwt(entity_id: &str) -> Result<String> {
     let url = format!("{}/{}", entity_id, WELL_KNOWN);
     debug!("EC {}", url);
     return get_query(&url).await;
 }
 
 /// To do a GET query
-pub async fn get_query(url: &str) -> String {
-    reqwest::get(url).await.unwrap().text().await.unwrap()
+pub async fn get_query(url: &str) -> Result<String> {
+    Ok(reqwest::get(url).await?.text().await?)
 }
 
 /// FIXME: as an example.
 /// This function will add a new sub-ordinate entity to
 /// a Trust Anchor or intermediate.
-pub async fn add_subordinate(entity_id: &str) {
-    let data = get_entity_configruation_as_jwt(&entity_id).await;
+pub async fn add_subordinate(entity_id: &str) -> Result<String> {
+    let data = get_entity_configruation_as_jwt(&entity_id).await?;
 
     self_verify_jwt(&data);
+    Ok("all good".to_string())
+}
+
+pub fn error_response(message: &str) -> actix_web::Result<HttpResponse> {
+    Ok(HttpResponse::NotFound()
+        .content_type("application/json")
+        .body(format!(
+            "{{\"error\":\"invalid_trust_chain\",\"error_description\": \"{}\"}}",
+            message
+        )))
 }
