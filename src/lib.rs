@@ -94,7 +94,7 @@ pub fn compile_entityid(
     // End of JSON manipulation
 
     // Set the metadata
-    let _ = payload.set_claim("metadta", metadata);
+    let _ = payload.set_claim("metadata", metadata);
 
     // Signing JWT
     let keydata = &*PRIVATE_KEY.clone();
@@ -147,6 +147,7 @@ pub fn get_jwks_from_payload(payload: &JwtPayload) -> JwkSet {
     jwks
 }
 
+/// Gets the payload and header without any cryptographic verification.
 pub fn get_unverified_payload_header(data: &str) -> (JwtPayload, JwsHeader) {
     let mut indexies: Vec<usize> = Vec::new();
     let mut i: usize = 0;
@@ -288,6 +289,7 @@ pub async fn resolve_entity_to_trustanchor(
         let ah_jwks = get_jwks_from_payload(&ah_payload);
         let (subs_payload, _) = verify_jwt_with_jwks(&sub_statement, Some(ah_jwks));
         // FIXME: In future if the above fails, then we should move to the next authority
+        // The above function verify_jwt_with_jwks does not have error handling part.
         if ta_flag == true {
             // Means this is the end of resolving
             let vjwt = VerifiedJWT::new(sub_statement, &subs_payload, true, false);
