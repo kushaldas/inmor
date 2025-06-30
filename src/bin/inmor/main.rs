@@ -159,7 +159,7 @@ async fn main() -> io::Result<()> {
     //
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
-    let redis = redis::Client::open("redis://127.0.0.1:6379").unwrap();
+    let redis = redis::Client::open("redis://redis:6379").unwrap();
     // Here first we set the new entity_id to redis
     set_app_entity_data(&entity_data, redis.clone());
 
@@ -183,7 +183,7 @@ async fn main() -> io::Result<()> {
             .wrap(middleware::Logger::default())
     })
     .workers(2)
-    .bind(("127.0.0.1", 8080))?
+    .bind(("0.0.0.0", 8080))?
     .run()
     .await
 }
