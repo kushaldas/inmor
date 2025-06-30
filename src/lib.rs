@@ -34,6 +34,11 @@ lazy_static! {
 }
 pub const WELL_KNOWN: &str = ".well-known/openid-federation";
 
+// This struct represents state
+pub struct AppState {
+    pub entity_id: String,
+}
+
 /// FIXME: get all parameters
 #[derive(Debug, Deserialize)]
 pub struct ResolveParams {
@@ -328,7 +333,7 @@ pub async fn resolve_entity_to_trustanchor(
 
 /// To create the signed JWT for resolve response
 fn create_resolve_response_jwt(
-    iss: &str,
+    state: &web::Data<AppState>,
     sub: &str,
     result: &Vec<VerifiedJWT>,
 ) -> Result<String, JoseError> {
@@ -338,6 +343,7 @@ fn create_resolve_response_jwt(
     header.set_claim("alg", Some(json!("RS256")));
 
     let mut payload = JwtPayload::new();
+    let iss = state.entity_id.clone();
     payload.set_issuer(iss);
     payload.set_subject(sub);
     payload.set_issued_at(&SystemTime::now());
@@ -363,6 +369,7 @@ fn create_resolve_response_jwt(
 pub async fn resolve_entity(
     info: Query<ResolveParams>,
     redis: web::Data<redis::Client>,
+    state: web::Data<AppState>,
 ) -> actix_web::Result<HttpResponse> {
     let mut found_ta = false;
     let ResolveParams { sub, trust_anchors } = info.into_inner();
@@ -464,7 +471,7 @@ pub async fn resolve_entity(
     }
     // If we reach here means we have a list of JWTs and also verified metadata.
     // TODO: deal with the signing error here.
-    let resp = create_resolve_response_jwt("http://localhost:8080", &sub, &result).unwrap();
+    let resp = create_resolve_response_jwt(&state, &sub, &result).unwrap();
     Ok(HttpResponse::Ok()
         .insert_header(("content-type", "application/resolve-response+jwt"))
         .body(resp))

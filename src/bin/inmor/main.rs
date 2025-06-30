@@ -165,6 +165,9 @@ async fn main() -> io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
+            .app_data(web::Data::new(AppState {
+                entity_id: "http://localhost:8080".to_string(),
+            }))
             .app_data(web::Data::new(redis.clone()))
             .service(
                 web::resource("/stuff")
