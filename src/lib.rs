@@ -326,6 +326,38 @@ pub async fn resolve_entity_to_trustanchor(
     return vec![];
 }
 
+/// To create the signed JWT for resolve response
+fn create_resolve_response_jwt(
+    iss: &str,
+    sub: &str,
+    result: &Vec<VerifiedJWT>,
+) -> Result<String, JoseError> {
+    let mut header = JwsHeader::new();
+    header.set_token_type("JWT");
+    header.set_claim("typ", Some(json!("resolve-response+jwt")));
+    header.set_claim("alg", Some(json!("RS256")));
+
+    let mut payload = JwtPayload::new();
+    payload.set_issuer(iss);
+    payload.set_subject(sub);
+    payload.set_issued_at(&SystemTime::now());
+
+    // Set expiry after 24 horus
+    let exp = SystemTime::now() + Duration::from_secs(86400);
+    payload.set_expires_at(&exp);
+
+    let trust_chain: Vec<String> = result.iter().map(|x| x.jwt.clone()).collect();
+    let _ = payload.set_claim("trust_chain", Some(json!(trust_chain)));
+
+    // Signing JWT
+    let keydata = &*PRIVATE_KEY.clone();
+    let key = Jwk::from_bytes(keydata).unwrap();
+
+    let signer = RS256.signer_from_jwk(&key)?;
+    let jwt = jwt::encode_with_signer(&payload, &header, &signer)?;
+    Ok(jwt)
+}
+
 /// https://openid.net/specs/openid-federation-1_0.html#name-resolve-request
 #[get("/resolve")]
 pub async fn resolve_entity(
@@ -430,7 +462,12 @@ pub async fn resolve_entity(
         // HACK:
         //println!("\n{:?}\n", res.payload)
     }
-    Ok(HttpResponse::Ok().body("hello"))
+    // If we reach here means we have a list of JWTs and also verified metadata.
+    // TODO: deal with the signing error here.
+    let resp = create_resolve_response_jwt("http://localhost:8080", &sub, &result).unwrap();
+    Ok(HttpResponse::Ok()
+        .insert_header(("content-type", "application/resolve-response+jwt"))
+        .body(resp))
 }
 
 /// Fetches the subordinate statement from authority
