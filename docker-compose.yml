@@ -1,0 +1,62 @@
+---
+services:
+  ta:
+    restart: always
+    build: .
+    image: docker.sunet.se/inmor:v0.0.1
+    volumes:
+      - ./target/debug/:/code/
+      - ./private.json:/code/private.json
+      - ./public.json:/code/public.json
+    depends_on:
+      redis:
+        condition: service_healthy
+    links:
+      - redis
+    command: ./inmor
+    ports:
+      - "8080:8080"
+  db:
+    restart: always
+    image: postgres:14-alpine
+    shm_size: 1024mb
+    #networks:
+      #- internal_network
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
+      interval: 30s
+      timeout: 60s
+      retries: 5
+      start_period: 80s 
+    volumes:
+      - ./db:/var/lib/postgresql/data
+    environment:
+      - 'POSTGRES_HOST_AUTH_METHOD=trust'
+
+  redis:
+    restart: always
+    image: redis:7-alpine
+    #networks:
+      #- internal_network
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 30s
+      timeout: 60s
+      retries: 5
+      start_period: 80s 
+    volumes:
+      - ./redis:/data
+
+  admin:
+    build: ./admin/
+    image: docker.sunet.se/inmor-admin:v0.0.1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ./docker-entrypoint.sh
+    volumes:
+      - ./admin/:/code
+    ports:
+      - "8000:8000"
