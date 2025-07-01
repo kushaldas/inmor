@@ -1,0 +1,13 @@
+django
+django-types
+black
+ruff
+redis
+django-extensions
+django-debug-toolbar
+pytz
+psycopg2-binary
+pysaml2
+djangosaml2
+django-redis
+jwcrypto
