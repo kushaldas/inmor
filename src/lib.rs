@@ -39,6 +39,8 @@ pub struct AppState {
     pub entity_id: String,
 }
 
+// SECTION FOR WEB QUERY PARAMETERS
+
 /// FIXME: get all parameters
 #[derive(Debug, Deserialize)]
 pub struct ResolveParams {
@@ -46,6 +48,14 @@ pub struct ResolveParams {
     #[serde(rename = "trust_anchor")]
     trust_anchors: Vec<String>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct TrustMarkParams {
+    trust_mark_type: String,
+    sub: String,
+}
+
+// QUERY PARAMETERS ENDS
 
 /// To store each JWT and verified payload from it
 /// This will be used to return the final result
@@ -475,6 +485,38 @@ pub async fn resolve_entity(
     Ok(HttpResponse::Ok()
         .insert_header(("content-type", "application/resolve-response+jwt"))
         .body(resp))
+}
+
+/// https://openid.net/specs/openid-federation-1_0.html#name-resolve-request
+#[get("/trust_mark")]
+pub async fn trust_mark(
+    info: Query<TrustMarkParams>,
+    redis: web::Data<redis::Client>,
+    state: web::Data<AppState>,
+) -> actix_web::Result<HttpResponse> {
+    let TrustMarkParams {
+        trust_mark_type,
+        sub,
+    } = info.into_inner();
+
+    let mut conn = redis
+        .get_connection_manager()
+        .await
+        .map_err(error::ErrorInternalServerError)?;
+
+    let query = format!("inmor:tm:{}", sub);
+
+    let res = redis::Cmd::hget(query, trust_mark_type)
+        .query_async::<String>(&mut conn)
+        .await
+        .map_err(error::ErrorInternalServerError);
+    if res.is_err() {
+        Ok(HttpResponse::NotFound().body(""))
+    } else {
+        Ok(HttpResponse::Ok()
+            .insert_header(("content-type", "application/trust-mark+jwt"))
+            .body(res.unwrap()))
+    }
 }
 
 /// Fetches the subordinate statement from authority
