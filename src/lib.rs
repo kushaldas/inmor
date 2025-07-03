@@ -58,6 +58,7 @@ pub struct TrustMarkParams {
 #[derive(Debug, Deserialize)]
 pub struct TrustMarkListParams {
     trust_mark_type: String,
+    sub: Option<String>,
 }
 
 // QUERY PARAMETERS ENDS
@@ -470,6 +471,7 @@ pub async fn resolve_entity(
                             let data = p.as_object().unwrap().clone();
                             Some(data)
                         }
+
                         // Even the subordinate statement does not have any policy
                         None => None,
                     }
@@ -499,7 +501,12 @@ pub async fn trust_marked_list(
     redis: web::Data<redis::Client>,
     state: web::Data<AppState>,
 ) -> actix_web::Result<HttpResponse> {
-    let TrustMarkListParams { trust_mark_type } = info.into_inner();
+    let TrustMarkListParams {
+        trust_mark_type,
+        sub,
+    } = info.into_inner();
+
+    println!("SUB: {:?}", sub);
 
     let mut conn = redis
         .get_connection_manager()
@@ -515,7 +522,17 @@ pub async fn trust_marked_list(
     if res.is_err() {
         Ok(HttpResponse::NotFound().body(""))
     } else {
-        let result = res.unwrap();
+        let mut result = res.unwrap();
+        if sub.is_some() {
+            // Means we have a sub value to check
+            let sub_entity = sub.unwrap();
+            if result.iter().any(|e| *e == sub_entity) {
+                result = vec![sub_entity];
+            } else {
+                // Means so such sub for the trust_mark_type in redis
+                return Ok(HttpResponse::NotFound().body(""));
+            }
+        }
 
         let body = match serde_json::to_string(&result) {
             Ok(d) => d,
