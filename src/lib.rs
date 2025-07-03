@@ -55,6 +55,11 @@ pub struct TrustMarkParams {
     sub: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct TrustMarkListParams {
+    trust_mark_type: String,
+}
+
 // QUERY PARAMETERS ENDS
 
 /// To store each JWT and verified payload from it
@@ -487,7 +492,43 @@ pub async fn resolve_entity(
         .body(resp))
 }
 
-/// https://openid.net/specs/openid-federation-1_0.html#name-resolve-request
+/// https://openid.net/specs/openid-federation-1_0.html#section-8.5.1
+#[get("/trust_marked_list")]
+pub async fn trust_marked_list(
+    info: Query<TrustMarkListParams>,
+    redis: web::Data<redis::Client>,
+    state: web::Data<AppState>,
+) -> actix_web::Result<HttpResponse> {
+    let TrustMarkListParams { trust_mark_type } = info.into_inner();
+
+    let mut conn = redis
+        .get_connection_manager()
+        .await
+        .map_err(error::ErrorInternalServerError)?;
+
+    let query = format!("inmor:tmtype:{}", trust_mark_type);
+
+    let res = redis::Cmd::smembers(query)
+        .query_async::<Vec<String>>(&mut conn)
+        .await
+        .map_err(error::ErrorInternalServerError);
+    if res.is_err() {
+        Ok(HttpResponse::NotFound().body(""))
+    } else {
+        let result = res.unwrap();
+
+        let body = match serde_json::to_string(&result) {
+            Ok(d) => d,
+            Err(_) => return Err(error::ErrorInternalServerError("JSON error")),
+        };
+        Ok(HttpResponse::Ok()
+            .insert_header(("content-type", "application/json"))
+            .body(body))
+    }
+}
+
+///
+/// https://openid.net/specs/openid-federation-1_0.html#section-8.6.1
 #[get("/trust_mark")]
 pub async fn trust_mark(
     info: Query<TrustMarkParams>,

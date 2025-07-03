@@ -180,6 +180,7 @@ async fn main() -> io::Result<()> {
             .service(fetch_subordinates)
             .service(resolve_entity)
             .service(trust_mark)
+            .service(trust_marked_list)
             .wrap(middleware::NormalizePath::trim())
             .wrap(middleware::Logger::default())
     })
