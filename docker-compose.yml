@@ -55,7 +55,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ./docker-entrypoint.sh
+    #command: ./docker-entrypoint.sh
+    command: sleep 864000
     volumes:
       - ./admin/:/code
     ports:
