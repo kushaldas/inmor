@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-md m-5">
+
+  <div class="m-5">
+    <h2>Existing Trust Marks</h2>
+  </div>
+  <div class="m-5">
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th scope="col">Entity</th>
+          <th scope="col">Trust Mark</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tm in page_obj %}
+        <tr>
+          <td>{{ tm.domain }}</td>
+          <td>{{ tm.tmt.tmtype }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="pagination">
+      <span class="step-links">
+        {% if page_obj.has_previous %}
+        <a href="?page=1">&laquo; first</a>
+        <a href="?page={{ page_obj.previous_page_number }}">previous</a>
+        {% endif %}
+
+        <span class="current">
+          Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+        </span>
+
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}">next</a>
+        <a href="?page={{ page_obj.paginator.num_pages }}">last &raquo;</a>
+        {% endif %}
+      </span>
+    </div>
+  </div>
+
+
+</div>
+{% endblock %}

@@ -1,3 +1,4 @@
+from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.http import HttpResponse
 from django.shortcuts import render
@@ -13,6 +14,14 @@ from .models import TrustMark, TrustMarkType
 def index(request):
     return render(request, "trustmarks/index.html")
 
+
+def listtrustmarks(request):
+    trust_mark_list= TrustMark.objects.all()
+    paginator = Paginator(trust_mark_list, 3)
+
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+    return render(request, "trustmarks/list.html", {"page_obj": page_obj})
 
 def addtrustmark(request):
     msg = ""
