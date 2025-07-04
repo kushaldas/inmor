@@ -416,14 +416,14 @@ pub async fn resolve_entity(
 
     // Verify that the result is not empty and we actually found a TA
     if result.is_empty() {
-        return error_response("invalid_trust_chain", "Failed to find trust chain");
+        return error_response_400("invalid_trust_chain", "Failed to find trust chain");
     }
     if result.iter().any(|i| i.taresult == true) {
         // Means we found our trust anchor
         found_ta = true;
     }
     if !found_ta {
-        return error_response("invalid_trust_chain", "Failed to find trust chain");
+        return error_response_400("invalid_trust_chain", "Failed to find trust chain");
     }
 
     let mut mpolicy: Option<Map<String, Value>> = None;
@@ -445,7 +445,7 @@ pub async fn resolve_entity(
                             match merged {
                                 Ok(policy) => Some(policy),
                                 Err(_) => {
-                                    return error_response(
+                                    return error_response_400(
                                         "invalid_trust_chain",
                                         "Failed in merging metadata policy",
                                     );
@@ -470,7 +470,7 @@ pub async fn resolve_entity(
                             let result =
                                 resolve_metadata_policy(mpolicy, mvalue.as_object().unwrap());
                             if result.is_err() {
-                                return error_response(
+                                return error_response_400(
                                     "invalid_trust_chain",
                                     "received error in applying metadata policy on metadata",
                                 );
@@ -658,7 +658,7 @@ pub async fn add_subordinate(entity_id: &str) -> Result<String> {
     Ok("all good".to_string())
 }
 
-pub fn error_response(edetails: &str, message: &str) -> actix_web::Result<HttpResponse> {
+pub fn error_response_404(edetails: &str, message: &str) -> actix_web::Result<HttpResponse> {
     Ok(HttpResponse::NotFound()
         .content_type("application/json")
         .body(format!(
