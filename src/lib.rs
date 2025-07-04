@@ -623,7 +623,7 @@ pub async fn trust_mark_query(
         .await
         .map_err(error::ErrorInternalServerError);
     if res.is_err() {
-        Ok(HttpResponse::NotFound().body(""))
+        error_response_404("not_found", "Trust mark not found.")
     } else {
         Ok(HttpResponse::Ok()
             .insert_header(("content-type", "application/trust-mark+jwt"))
