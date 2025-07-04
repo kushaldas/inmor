@@ -90,6 +90,8 @@ impl VerifiedJWT {
     }
 }
 
+// TODO: There is only key here, in future we will need
+// to handle multiple keys so that we have a proper keyset.
 /// To create a JwkSet for the public keys of the TA
 pub fn get_ta_jwks_public_keyset() -> JwkSet {
     let mut keymap = Map::new();
