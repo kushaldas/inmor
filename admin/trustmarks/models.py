@@ -27,6 +27,7 @@ class TrustMark(models.Model):
         return self.domain
 
     class Meta:
+        unique_together = ("tmt", "domain")
         indexes = [
             models.Index(fields=["domain"]),
             models.Index(fields=["active"]),
