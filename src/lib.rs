@@ -8,7 +8,7 @@ use reqwest::blocking;
 use std::fmt::format;
 
 use actix_web::{
-    App, HttpRequest, HttpResponse, HttpServer, Responder, error, get, middleware, web,
+    App, HttpRequest, HttpResponse, HttpServer, Responder, error, get, middleware, post, web,
 };
 use actix_web_lab::extract::Query;
 
@@ -37,6 +37,7 @@ pub const WELL_KNOWN: &str = ".well-known/openid-federation";
 // This struct represents state
 pub struct AppState {
     pub entity_id: String,
+    pub public_keyset: JwkSet,
 }
 
 // SECTION FOR WEB QUERY PARAMETERS
@@ -61,6 +62,11 @@ pub struct TrustMarkListParams {
     sub: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct TrustMarkStatusParams {
+    trust_mark: String,
+}
+
 // QUERY PARAMETERS ENDS
 
 /// To store each JWT and verified payload from it
@@ -82,6 +88,21 @@ impl VerifiedJWT {
             taresult,
         }
     }
+}
+
+/// To create a JwkSet for the public keys of the TA
+pub fn get_ta_jwks_public_keyset() -> JwkSet {
+    let mut keymap = Map::new();
+    let public_keydata = &*PUBLIEC_KEY.clone();
+    let publickey = Jwk::from_bytes(public_keydata).unwrap();
+    let mut keys: Vec<Value> = Vec::new();
+    let map: Map<String, Value> = publickey.as_ref().clone();
+    keys.push(json!(map));
+    // Now outer map
+    keymap.insert("keys".to_string(), json!(keys));
+
+    let jwks = JwkSet::from_map(keymap).unwrap();
+    jwks
 }
 
 pub fn compile_entityid(
@@ -201,7 +222,7 @@ pub fn get_unverified_payload_header(data: &str) -> (JwtPayload, JwsHeader) {
 }
 
 /// Verify JWT against given JWKS
-pub fn verify_jwt_with_jwks(data: &str, keys: Option<JwkSet>) -> (JwtPayload, JwsHeader) {
+pub fn verify_jwt_with_jwks(data: &str, keys: Option<JwkSet>) -> Result<(JwtPayload, JwsHeader)> {
     // Code to find the header & payload without any verification
     let (payload, header) = get_unverified_payload_header(data); // Now either use the passed one or use self keys
     let jwks = match keys {
@@ -221,17 +242,17 @@ pub fn verify_jwt_with_jwks(data: &str, keys: Option<JwkSet>) -> (JwtPayload, Jw
         _ => Box::new(ES512.verifier_from_jwk(&key).unwrap()),
     };
     let verifier = &*boxed_verifier;
-    let (payload, header) = jwt::decode_with_verifier(&data, verifier).unwrap();
-    (payload, header)
+    let (payload, header) = jwt::decode_with_verifier(&data, verifier)?;
+    Ok((payload, header))
 }
 
 /// This function will self veify the JWT and returns
 /// the payload and header after verification.
-pub fn self_verify_jwt(data: &str) -> (JwtPayload, JwsHeader) {
+pub fn self_verify_jwt(data: &str) -> Result<(JwtPayload, JwsHeader)> {
     let (payload, header) = get_unverified_payload_header(data);
     let jwks = get_jwks_from_payload(&payload);
-    let (payload, header) = verify_jwt_with_jwks(data, Some(jwks));
-    (payload, header)
+    let (payload, header) = verify_jwt_with_jwks(data, Some(jwks))?;
+    Ok((payload, header))
 }
 
 pub async fn resolve_entity_to_trustanchor(
@@ -257,7 +278,7 @@ pub async fn resolve_entity_to_trustanchor(
     // Add it already visited
     visited.insert(sub.to_string(), true);
 
-    let (opayload, oheader) = self_verify_jwt(&original_ec);
+    let (opayload, oheader) = self_verify_jwt(&original_ec).unwrap();
 
     if start == true {
         let vjwt = VerifiedJWT::new(original_ec, &opayload, false, false);
@@ -292,7 +313,7 @@ pub async fn resolve_entity_to_trustanchor(
         };
 
         // Verify and get the payload
-        let (ah_payload, _) = self_verify_jwt(&ah_jwt);
+        let (ah_payload, _) = self_verify_jwt(&ah_jwt).unwrap();
         // Now find the fetch endpoint
         let ah_metadata = ah_payload.claim("metadata").unwrap();
         let fetch_endpoint = ah_metadata
@@ -308,9 +329,9 @@ pub async fn resolve_entity_to_trustanchor(
             };
         // Get the authority's JWKS and then verify the subordinate statement against them.
         let ah_jwks = get_jwks_from_payload(&ah_payload);
-        let (subs_payload, _) = verify_jwt_with_jwks(&sub_statement, Some(ah_jwks));
+        let (subs_payload, _) = verify_jwt_with_jwks(&sub_statement, Some(ah_jwks)).unwrap();
         // FIXME: In future if the above fails, then we should move to the next authority
-        // The above function verify_jwt_with_jwks does not have error handling part.
+        // The above function verify_jwt_with_jwks now has error handling part.
         if ta_flag == true {
             // Means this is the end of resolving
             let vjwt = VerifiedJWT::new(sub_statement, &subs_payload, true, false);
@@ -395,14 +416,14 @@ pub async fn resolve_entity(
 
     // Verify that the result is not empty and we actually found a TA
     if result.is_empty() {
-        return error_response("Failed to find trust chain");
+        return error_response("invalid_trust_chain", "Failed to find trust chain");
     }
     if result.iter().any(|i| i.taresult == true) {
         // Means we found our trust anchor
         found_ta = true;
     }
     if !found_ta {
-        return error_response("Failed to find trust chain");
+        return error_response("invalid_trust_chain", "Failed to find trust chain");
     }
 
     let mut mpolicy: Option<Map<String, Value>> = None;
@@ -424,7 +445,10 @@ pub async fn resolve_entity(
                             match merged {
                                 Ok(policy) => Some(policy),
                                 Err(_) => {
-                                    return error_response("Failed in merging metadata policy");
+                                    return error_response(
+                                        "invalid_trust_chain",
+                                        "Failed in merging metadata policy",
+                                    );
                                 }
                             }
                         }
@@ -447,6 +471,7 @@ pub async fn resolve_entity(
                                 resolve_metadata_policy(mpolicy, mvalue.as_object().unwrap());
                             if result.is_err() {
                                 return error_response(
+                                    "invalid_trust_chain",
                                     "received error in applying metadata policy on metadata",
                                 );
                             }
@@ -494,6 +519,35 @@ pub async fn resolve_entity(
         .body(resp))
 }
 
+/// https://openid.net/specs/openid-federation-1_0.html#section-8.4.1
+#[get("/trust_mark_status")]
+pub async fn trust_mark_status(
+    info: Query<TrustMarkStatusParams>,
+    redis: web::Data<redis::Client>,
+    state: web::Data<AppState>,
+) -> actix_web::Result<HttpResponse> {
+    let TrustMarkStatusParams { trust_mark } = info.into_inner();
+
+    let jwks = state.public_keyset.clone();
+    let (payload, _) = match verify_jwt_with_jwks(&trust_mark, Some(jwks)) {
+        Ok(d) => d,
+        Err(err) => {
+            return error_response_400("invalid_request", "Could not verify the request");
+        }
+    };
+
+    //
+    let mut result = HashMap::new();
+    result.insert("active", true);
+    let body = match serde_json::to_string(&result) {
+        Ok(d) => d,
+        Err(_) => return Err(error::ErrorInternalServerError("JSON error")),
+    };
+    Ok(HttpResponse::Ok()
+        .insert_header(("content-type", "application/json"))
+        .body(body))
+}
+
 /// https://openid.net/specs/openid-federation-1_0.html#section-8.5.1
 #[get("/trust_marked_list")]
 pub async fn trust_marked_list(
@@ -505,8 +559,6 @@ pub async fn trust_marked_list(
         trust_mark_type,
         sub,
     } = info.into_inner();
-
-    println!("SUB: {:?}", sub);
 
     let mut conn = redis
         .get_connection_manager()
@@ -547,7 +599,7 @@ pub async fn trust_marked_list(
 ///
 /// https://openid.net/specs/openid-federation-1_0.html#section-8.6.1
 #[get("/trust_mark")]
-pub async fn trust_mark(
+pub async fn trust_mark_query(
     info: Query<TrustMarkParams>,
     redis: web::Data<redis::Client>,
     state: web::Data<AppState>,
@@ -606,11 +658,20 @@ pub async fn add_subordinate(entity_id: &str) -> Result<String> {
     Ok("all good".to_string())
 }
 
-pub fn error_response(message: &str) -> actix_web::Result<HttpResponse> {
+pub fn error_response(edetails: &str, message: &str) -> actix_web::Result<HttpResponse> {
     Ok(HttpResponse::NotFound()
         .content_type("application/json")
         .body(format!(
-            "{{\"error\":\"invalid_trust_chain\",\"error_description\": \"{}\"}}",
-            message
+            "{{\"error\":\"{}\",\"error_description\": \"{}\"}}",
+            edetails, message
+        )))
+}
+
+pub fn error_response_400(edetails: &str, message: &str) -> actix_web::Result<HttpResponse> {
+    Ok(HttpResponse::BadRequest()
+        .content_type("application/json")
+        .body(format!(
+            "{{\"error\":\"{}\",\"error_description\": \"{}\"}}",
+            edetails, message
         )))
 }

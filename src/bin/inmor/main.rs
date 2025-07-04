@@ -164,9 +164,13 @@ async fn main() -> io::Result<()> {
     set_app_entity_data(&entity_data, redis.clone());
 
     HttpServer::new(move || {
+        //
+        let jwks = get_ta_jwks_public_keyset();
+        //
         App::new()
             .app_data(web::Data::new(AppState {
                 entity_id: "http://localhost:8080".to_string(),
+                public_keyset: jwks,
             }))
             .app_data(web::Data::new(redis.clone()))
             .service(
@@ -179,8 +183,9 @@ async fn main() -> io::Result<()> {
             .service(list_subordinates)
             .service(fetch_subordinates)
             .service(resolve_entity)
-            .service(trust_mark)
+            .service(trust_mark_query)
             .service(trust_marked_list)
+            .service(trust_mark_status)
             .wrap(middleware::NormalizePath::trim())
             .wrap(middleware::Logger::default())
     })
