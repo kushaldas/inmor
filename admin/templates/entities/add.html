@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-md m-5">
+
+    <h2>Add a new entity as subordinate</h2>
+    <div class="mb-3">
+    <form method="post">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label for="entity" class="form-label">Entity (URL)</label>
+        <input type="text" class="form-control" name="entity" id="id_entity">
+      </div>
+      <button type="submit" class="btn btn-primary">Submit</button>
+    </form>
+    </div>
+
+    <div class="mb-3">
+      {{ msg }}
+    </div>
+    
+
+</div>
+{% endblock %}
