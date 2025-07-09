@@ -163,6 +163,13 @@ def tree_walking(entity_id: str, r: Redis, visited: Optional[set] = None):
         resp = httpx.get(list_endpoint)
         subordinates = json.loads(resp.text)
         for subordinate in subordinates:
+            if subordinate in visited:
+                # Means we already visited it, it is a loop.
+                # We should skip it.
+                print(
+                    f"LOOP DETECTED: Found {subordinate} but already visited, means LOOP."
+                )
+                continue
             print(f"Found {subordinate}")
             # Now visit that suboridnate
             visited.update(tree_walking(subordinate, r, visited))
