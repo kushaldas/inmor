@@ -88,11 +88,18 @@ def fetch_payload(entity_id: str):
 
 
 def fetch_subordinate_statements(authority_hints: List[str], entity_id: str, r: Redis):
-    """Fetches subordinate statements from the authority hints."""
+    """Fetches subordinate statements from the authority hints.
+
+    :args authority_hints: A list of authority hints from entity config.
+    :args entity_id: str value of the entity.
+    :args r: Redis client instance.
+    """
+    print(authority_hints)
+    print(f"Entity is: {entity_id}")
     for ahint in authority_hints:
         # First fetch the entity configuration of the authority & self verify
         try:
-            payload, _jwt_net = fetch_payload(entity_id)
+            payload, _jwt_net = fetch_payload(ahint)
         except Exception as e:
             logger.error(
                 f"Failed to validate {entity_id} wtih error {e} while doing subordinate statement entry."
@@ -133,7 +140,6 @@ def tree_walking(entity_id: str, r: Redis, visited: Optional[set] = None):
         logger.error(f"Failed to validate {entity_id} wtih error {e}")
         return visited
     # Add to the visited list
-    print(f"Visited: {entity_id}")
     visited.add(entity_id)
     # Add to the entity hash in redis
     r.hset("inmor:entities", entity_id, jwt_net)
@@ -166,11 +172,10 @@ def tree_walking(entity_id: str, r: Redis, visited: Optional[set] = None):
             if subordinate in visited:
                 # Means we already visited it, it is a loop.
                 # We should skip it.
-                print(
-                    f"LOOP DETECTED: Found {subordinate} but already visited, means LOOP."
-                )
+                logger.warning
+                (f"LOOP DETECTED: Found {subordinate} but already visited, means LOOP.")
                 continue
-            print(f"Found {subordinate}")
+            logger.info(f"Found {subordinate}")
             # Now visit that suboridnate
             visited.update(tree_walking(subordinate, r, visited))
 
@@ -182,4 +187,5 @@ def tree_walking(entity_id: str, r: Redis, visited: Optional[set] = None):
 
 if __name__ == "__main__":
     r = Redis("redis")
+    logging.basicConfig(level=logging.INFO)
     tree_walking("", r)
