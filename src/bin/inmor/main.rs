@@ -98,6 +98,9 @@ fn read_configuration() -> Value {
     let mut fed = Map::new();
     fed.insert("federation_entity".to_string(), json!(map));
 
+    // TODO: Add any other metadata below
+    // Example: Trustmarks
+
     json!(fed)
 }
 
@@ -155,7 +158,7 @@ async fn main() -> io::Result<()> {
     };
 
     let entity_data = compile_entityid(&format!("{domain}/"), &domain, Some(meta)).unwrap();
-    println!("{:?}", entity_data);
+    println!("{entity_data:?}");
 
     // Now the normal web app flow
     //
