@@ -103,8 +103,8 @@ pub fn get_ta_jwks_public_keyset() -> JwkSet {
     // Now outer map
     keymap.insert("keys".to_string(), json!(keys));
 
-    let jwks = JwkSet::from_map(keymap).unwrap();
-    jwks
+    
+    JwkSet::from_map(keymap).unwrap()
 }
 
 pub fn compile_entityid(
@@ -187,8 +187,8 @@ pub fn get_jwks_from_payload(payload: &JwtPayload) -> JwkSet {
     let keys = jwks_data.get("keys").unwrap();
     let mut internal_map: Map<String, Value> = Map::new();
     internal_map.insert("keys".to_string(), keys.clone());
-    let jwks = JwkSet::from_map(internal_map).unwrap();
-    jwks
+    
+    JwkSet::from_map(internal_map).unwrap()
 }
 
 /// Gets the payload and header without any cryptographic verification.
@@ -238,13 +238,13 @@ pub fn verify_jwt_with_jwks(data: &str, keys: Option<JwkSet>) -> Result<(JwtPayl
     // FIXME: We need different verifiers for different kinds of
     // JWK.
     let boxed_verifier: Box<dyn JwsVerifier> = match header.algorithm().unwrap() {
-        "RS256" => Box::new(RS256.verifier_from_jwk(&key).unwrap()),
-        "PS256" => Box::new(PS256.verifier_from_jwk(&key).unwrap()),
+        "RS256" => Box::new(RS256.verifier_from_jwk(key).unwrap()),
+        "PS256" => Box::new(PS256.verifier_from_jwk(key).unwrap()),
         // FIXME: This has to be fixed for all different keys
-        _ => Box::new(ES512.verifier_from_jwk(&key).unwrap()),
+        _ => Box::new(ES512.verifier_from_jwk(key).unwrap()),
     };
     let verifier = &*boxed_verifier;
-    let (payload, header) = jwt::decode_with_verifier(&data, verifier)?;
+    let (payload, header) = jwt::decode_with_verifier(data, verifier)?;
     Ok((payload, header))
 }
 
@@ -262,7 +262,7 @@ pub async fn resolve_entity_to_trustanchor(
     trust_anchors: Vec<&str>,
     start: bool,
 ) -> Vec<VerifiedJWT> {
-    eprintln!("\nReceived {} with trust anchors {:?}", sub, trust_anchors);
+    eprintln!("\nReceived {sub} with trust anchors {trust_anchors:?}");
 
     let empty_authority: Vec<String> = Vec::new();
     let eal = json!(empty_authority);
@@ -273,7 +273,7 @@ pub async fn resolve_entity_to_trustanchor(
     // to stop infinite loop
     let mut visited: HashMap<String, bool> = HashMap::new();
     // First get the entity configuration and self verify
-    let original_ec = match get_entity_configruation_as_jwt(&sub).await {
+    let original_ec = match get_entity_configruation_as_jwt(sub).await {
         Ok(res) => res,
         Err(_) => return result,
     };
@@ -282,7 +282,7 @@ pub async fn resolve_entity_to_trustanchor(
 
     let (opayload, oheader) = self_verify_jwt(&original_ec).unwrap();
 
-    if start == true {
+    if start {
         let vjwt = VerifiedJWT::new(original_ec, &opayload, false, false);
         result.push(vjwt);
     }
@@ -292,7 +292,7 @@ pub async fn resolve_entity_to_trustanchor(
         // Means we are at one Trust anchor (most probably)
         None => &eal,
     };
-    println!("\nAuthority hints: {:?}\n", authority_hints);
+    println!("\nAuthority hints: {authority_hints:?}\n");
     // Loop over the authority hints
     for ah in authority_hints.as_array().unwrap() {
         // Flag to mark if we found the trust anchor
@@ -304,7 +304,7 @@ pub async fn resolve_entity_to_trustanchor(
             continue;
         }
         // If this is one of the trust anchor, then we are done
-        if trust_anchors.iter().any(|i| *i == ah_entity) {
+        if trust_anchors.contains(&ah_entity) {
             // Means we found our trust anchor
             ta_flag = true;
         }
@@ -325,7 +325,7 @@ pub async fn resolve_entity_to_trustanchor(
             .unwrap();
         // Fetch the entity statement/ subordinate statement
         let sub_statement =
-            match fetch_subordinate_statement(fetch_endpoint.as_str().unwrap(), &sub).await {
+            match fetch_subordinate_statement(fetch_endpoint.as_str().unwrap(), sub).await {
                 Ok(res) => res,
                 Err(_) => return result,
             };
@@ -334,7 +334,7 @@ pub async fn resolve_entity_to_trustanchor(
         let (subs_payload, _) = verify_jwt_with_jwks(&sub_statement, Some(ah_jwks)).unwrap();
         // FIXME: In future if the above fails, then we should move to the next authority
         // The above function verify_jwt_with_jwks now has error handling part.
-        if ta_flag == true {
+        if ta_flag {
             // Means this is the end of resolving
             let vjwt = VerifiedJWT::new(sub_statement, &subs_payload, true, false);
             result.push(vjwt);
@@ -367,7 +367,7 @@ pub async fn resolve_entity_to_trustanchor(
             return result;
         }
     }
-    return vec![];
+    vec![]
 }
 
 /// To create the signed JWT for resolve response
@@ -420,7 +420,7 @@ pub async fn resolve_entity(
     if result.is_empty() {
         return error_response_400("invalid_trust_chain", "Failed to find trust chain");
     }
-    if result.iter().any(|i| i.taresult == true) {
+    if result.iter().any(|i| i.taresult) {
         // Means we found our trust anchor
         found_ta = true;
     }
@@ -567,7 +567,7 @@ pub async fn trust_marked_list(
         .await
         .map_err(error::ErrorInternalServerError)?;
 
-    let query = format!("inmor:tmtype:{}", trust_mark_type);
+    let query = format!("inmor:tmtype:{trust_mark_type}");
 
     let res = redis::Cmd::smembers(query)
         .query_async::<Vec<String>>(&mut conn)
@@ -580,7 +580,7 @@ pub async fn trust_marked_list(
         if sub.is_some() {
             // Means we have a sub value to check
             let sub_entity = sub.unwrap();
-            if result.iter().any(|e| *e == sub_entity) {
+            if result.contains(&sub_entity) {
                 result = vec![sub_entity];
             } else {
                 // Means so such sub for the trust_mark_type in redis
@@ -616,7 +616,7 @@ pub async fn trust_mark_query(
         .await
         .map_err(error::ErrorInternalServerError)?;
 
-    let query = format!("inmor:tm:{}", sub);
+    let query = format!("inmor:tm:{sub}");
 
     let res = redis::Cmd::hget(query, trust_mark_type)
         .query_async::<String>(&mut conn)
@@ -633,15 +633,15 @@ pub async fn trust_mark_query(
 
 /// Fetches the subordinate statement from authority
 pub async fn fetch_subordinate_statement(fetch_url: &str, entity_id: &str) -> Result<String> {
-    let url = format!("{}?sub={}", fetch_url, entity_id);
-    debug!("FETCH {}", url);
+    let url = format!("{fetch_url}?sub={entity_id}");
+    debug!("FETCH {url}");
     return get_query(&url).await;
 }
 
 /// Get the entity configuration for a given entity_id
 pub async fn get_entity_configruation_as_jwt(entity_id: &str) -> Result<String> {
-    let url = format!("{}/{}", entity_id, WELL_KNOWN);
-    debug!("EC {}", url);
+    let url = format!("{entity_id}/{WELL_KNOWN}");
+    debug!("EC {url}");
     return get_query(&url).await;
 }
 
@@ -654,7 +654,7 @@ pub async fn get_query(url: &str) -> Result<String> {
 /// This function will add a new sub-ordinate entity to
 /// a Trust Anchor or intermediate.
 pub async fn add_subordinate(entity_id: &str) -> Result<String> {
-    let data = get_entity_configruation_as_jwt(&entity_id).await?;
+    let data = get_entity_configruation_as_jwt(entity_id).await?;
 
     self_verify_jwt(&data);
     Ok("all good".to_string())
@@ -664,8 +664,7 @@ pub fn error_response_404(edetails: &str, message: &str) -> actix_web::Result<Ht
     Ok(HttpResponse::NotFound()
         .content_type("application/json")
         .body(format!(
-            "{{\"error\":\"{}\",\"error_description\": \"{}\"}}",
-            edetails, message
+            "{{\"error\":\"{edetails}\",\"error_description\": \"{message}\"}}"
         )))
 }
 
@@ -673,7 +672,6 @@ pub fn error_response_400(edetails: &str, message: &str) -> actix_web::Result<Ht
     Ok(HttpResponse::BadRequest()
         .content_type("application/json")
         .body(format!(
-            "{{\"error\":\"{}\",\"error_description\": \"{}\"}}",
-            edetails, message
+            "{{\"error\":\"{edetails}\",\"error_description\": \"{message}\"}}"
         )))
 }
