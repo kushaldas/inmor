@@ -103,7 +103,6 @@ pub fn get_ta_jwks_public_keyset() -> JwkSet {
     // Now outer map
     keymap.insert("keys".to_string(), json!(keys));
 
-    
     JwkSet::from_map(keymap).unwrap()
 }
 
@@ -187,11 +186,12 @@ pub fn get_jwks_from_payload(payload: &JwtPayload) -> JwkSet {
     let keys = jwks_data.get("keys").unwrap();
     let mut internal_map: Map<String, Value> = Map::new();
     internal_map.insert("keys".to_string(), keys.clone());
-    
+
     JwkSet::from_map(internal_map).unwrap()
 }
 
 /// Gets the payload and header without any cryptographic verification.
+#[allow(clippy::explicit_counter_loop)]
 pub fn get_unverified_payload_header(data: &str) -> (JwtPayload, JwsHeader) {
     let mut indexies: Vec<usize> = Vec::new();
     let mut i: usize = 0;
@@ -300,7 +300,7 @@ pub async fn resolve_entity_to_trustanchor(
         // Get the str from the JSON value
         let ah_entity: &str = ah.as_str().unwrap();
         // If we already visited the authority then continue
-        if visited.get(ah_entity).is_some() {
+        if visited.contains_key(ah_entity) {
             continue;
         }
         // If this is one of the trust anchor, then we are done
@@ -374,7 +374,7 @@ pub async fn resolve_entity_to_trustanchor(
 fn create_resolve_response_jwt(
     state: &web::Data<AppState>,
     sub: &str,
-    result: &Vec<VerifiedJWT>,
+    result: &[VerifiedJWT],
 ) -> Result<String, JoseError> {
     let mut header = JwsHeader::new();
     header.set_token_type("JWT");
@@ -622,12 +622,11 @@ pub async fn trust_mark_query(
         .query_async::<String>(&mut conn)
         .await
         .map_err(error::ErrorInternalServerError);
-    if res.is_err() {
-        error_response_404("not_found", "Trust mark not found.")
-    } else {
-        Ok(HttpResponse::Ok()
+    match res {
+        Ok(result) => Ok(HttpResponse::Ok()
             .insert_header(("content-type", "application/trust-mark+jwt"))
-            .body(res.unwrap()))
+            .body(result)),
+        Err(_) => error_response_404("not_found", "Trust mark not found."),
     }
 }
 
