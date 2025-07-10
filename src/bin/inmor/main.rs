@@ -3,7 +3,7 @@
 use lazy_static::lazy_static;
 use redis::Client;
 use std::fmt::format;
-use std::io;
+use std::{env, io};
 
 use actix_web::{
     App, HttpRequest, HttpResponse, HttpServer, Responder, error, get, middleware, web,
@@ -73,7 +73,10 @@ async fn index() -> impl Responder {
 // TODO: maybe returning a better structure from here instead of Value
 fn read_configuration() -> Value {
     // HACK: Fixed domain name for now
-    let domain = "http://localhost:8080";
+    let domain = match env::var("TA_DOMAIN") {
+        Ok(d) => d,
+        Err(_) => "http://localhost:8080".to_string(),
+    };
     let mut map = Map::new();
     map.insert(
         "federation_fetch_endpoint".to_string(),
@@ -146,12 +149,12 @@ async fn list_subordinates(redis: web::Data<redis::Client>) -> actix_web::Result
 async fn main() -> io::Result<()> {
     // Start of new signed entity_id for the application
     let meta = read_configuration();
-    let entity_data = compile_entityid(
-        "http://localhost:8080/",
-        "http://localhost:8080",
-        Some(meta),
-    )
-    .unwrap();
+    let domain = match env::var("TA_DOMAIN") {
+        Ok(d) => d,
+        Err(_) => "http://localhost:8080".to_string(),
+    };
+
+    let entity_data = compile_entityid(&format!("{domain}/"), &domain, Some(meta)).unwrap();
     println!("{:?}", entity_data);
 
     // Now the normal web app flow
@@ -169,7 +172,7 @@ async fn main() -> io::Result<()> {
         //
         App::new()
             .app_data(web::Data::new(AppState {
-                entity_id: "http://localhost:8080".to_string(),
+                entity_id: domain.to_string(),
                 public_keyset: jwks,
             }))
             .app_data(web::Data::new(redis.clone()))
