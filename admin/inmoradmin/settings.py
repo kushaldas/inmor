@@ -143,6 +143,8 @@ CACHES = {
 }
 
 SIGNING_PRIVATE_KEY = jwk.JWK.from_json(open("./private.json").read())
+TA_DOMAIN = "http://localhost:8080"
+TRUSTMARK_PROVIDER = "http://localhost:8080"
 # DATABASES = {
 # "default": {
 # "ENGINE": "django.db.backends.sqlite3",

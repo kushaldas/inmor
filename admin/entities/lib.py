@@ -29,7 +29,7 @@ def add_subordinate(entity_id: str, r: Redis):
     # TODO: Verify that the authority_hints matches with the inmor's entity_id.
 
     # This is the data we care for now
-    sub_data = {"iss": "http://localhost:8080"}
+    sub_data = {"iss": settings.TA_DOMAIN}
     sub_data["jwks"] = payload.get("jwks")
     sub_data["authority_hints"] = payload.get("authority_hints")
     metadata = payload.get("metadata")
