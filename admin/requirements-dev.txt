@@ -12,3 +12,4 @@ djangosaml2
 django-redis
 jwcrypto
 httpx
+django-click

@@ -16,7 +16,7 @@ def add_trustmark(entity: str, trustmarktype: str, r: redis.Redis) -> str:
     # Based on https://openid.net/specs/openid-federation-1_0.html#name-trust-marks
 
     # This is the data we care for now
-    sub_data = {"iss": settings.TRUSTMARK_DOMAIN}
+    sub_data = {"iss": settings.TRUSTMARK_PROVIDER}
     sub_data["sub"] = entity
     now = datetime.now()
     exp = now + timedelta(days=365)
