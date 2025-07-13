@@ -56,6 +56,7 @@ def add_subordinate(entity_id: str, r: Redis):
     # Now we should set it in the redis
     r.hset("inmor:subordinates", sub_data["sub"], token_data)
     # FIXME: Add the entity in the queue for walking the tree (if any)
+    r.lpush("inmor:newsubordinate", entity_id)
 
 
 def self_validate(token: jwt.JWT):
