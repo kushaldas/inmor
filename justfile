@@ -16,7 +16,7 @@ dev: venv
 lint: venv
   # The Python code is not packaged, so imports are currently
   # relative to the admin/ directory
-  source .venv/bin/activate && \
+  . .venv/bin/activate && \
   ty check . --extra-search-path=admin/ && \
   ruff check .
 
