@@ -6,4 +6,9 @@ _default:
 dev:
   uv venv
   uv pip install -r admin/requirements-dev.txt
-  ./scripts/create-keys.py
+  uv run scripts/create-keys.py
+
+# To remove the files of the dev environment
+clean:
+  rm -rf .venv
+  rm -f public.json private.json admin/private.json
