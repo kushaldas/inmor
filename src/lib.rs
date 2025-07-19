@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use log::debug;
 use redis::Client;
 use reqwest::blocking;
-use std::fmt::format;
+use std::fmt::{format, Display};
 
 use actix_web::{
     App, HttpRequest, HttpResponse, HttpServer, Responder, error, get, middleware, post, web,
@@ -26,6 +26,8 @@ use serde::Serialize;
 use serde::{Deserialize, de::Error};
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
+use std::env;
+use std::ops::Deref;
 use std::time::{Duration, SystemTime};
 
 lazy_static! {
@@ -87,6 +89,70 @@ impl VerifiedJWT {
             substatement: subs,
             taresult,
         }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct URL(String);
+impl Deref for URL {
+    type Target = String;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for URL {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Clone for URL {
+    fn clone(&self) -> Self {
+        URL(self.0.clone())
+    }
+}
+
+#[derive(Debug)]
+pub struct Endpoints {
+    fetch: URL,
+    list: URL,
+    resolve: URL,
+}
+
+impl Endpoints {
+    pub fn to_openid_metadata(&self) -> Value {
+        let mut ret = Map::new();
+        ret.insert("federation_fetch_endpoint".to_string(), json!(self.fetch));
+        ret.insert("federation_list_endpoint".to_string(), json!(self.list));
+        ret.insert("federation_resolve_endpoint".to_string(), json!(self.resolve));
+        json!(ret)
+    }
+}
+
+#[derive(Debug)]
+pub struct ServerConfiguration {
+    pub domain: URL,
+    pub endpoints: Endpoints,
+}
+
+
+impl ServerConfiguration {
+    pub fn new(domain: &str) -> ServerConfiguration {
+        ServerConfiguration {
+            domain: URL(String::from(domain)),
+            endpoints: Endpoints {
+                fetch: URL(format!("{}/fetch", domain)),
+                list: URL(format!("{}/list", domain)),
+                resolve: URL(format!("{}/resolve", domain)),
+            },
+        }
+    }
+
+    // Constructs a instance of ServerConfiguration by fetching required values from env vars
+    pub fn from_env() -> ServerConfiguration {
+        let domain = env::var("TA_DOMAIN").unwrap_or("http://localhost:8080".to_string());
+        ServerConfiguration::new(&domain)
     }
 }
 
