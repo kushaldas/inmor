@@ -1,11 +1,15 @@
-import json
-import sys
 from datetime import datetime, timedelta
 
 from django.conf import settings
-from jwcrypto import jwk, jwt
+from jwcrypto import jwt
+from pydantic import BaseModel
 
 import redis
+
+
+class TrustMarkRequest(BaseModel):
+    entity: str
+    tmt_select: str
 
 
 def add_trustmark(entity: str, trustmarktype: str, r: redis.Redis) -> str:
