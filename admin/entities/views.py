@@ -1,6 +1,6 @@
 from django.core.paginator import Paginator
 from django.db import IntegrityError
-from django.http import HttpResponse
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django_redis import get_redis_connection
 
@@ -11,11 +11,11 @@ from .models import Subordinate
 # Create your views here.
 
 
-def index(request):
+def index(request: HttpRequest):
     return render(request, "entities/index.html")
 
 
-def list_subordinates(request):
+def list_subordinates(request: HttpRequest):
     subordinate_list= Subordinate.objects.all()
     paginator = Paginator(subordinate_list, 3)
 
@@ -23,7 +23,7 @@ def list_subordinates(request):
     page_obj = paginator.get_page(page_number)
     return render(request, "entities/list.html", {"page_obj": page_obj})
 
-def add_subordinate_entity(request):
+def add_subordinate_entity(request: HttpRequest):
     msg = ""
 
     if request.method == "POST":
