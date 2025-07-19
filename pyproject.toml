@@ -18,10 +18,46 @@ dependencies = [
 Home = "https://github.com/kushaldas/pyinmor"
 
 [tool.pyright]
-
 stubPath = "typings"
 reportAny = false
 reportUnknownMemberType = false
 reportUnknownVariableType = false
 reportUnknownArgumentType = false
 reportExplicitAny = false
+
+[tool.ruff]
+exclude = [
+    "db",
+    "redis",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+
+[tool.ty.src]
+exclude = [
+    "db",
+]
