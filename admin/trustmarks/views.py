@@ -1,29 +1,32 @@
 from django.core.paginator import Paginator
 from django.db import IntegrityError
-from django.http import HttpResponse
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django_redis import get_redis_connection
 
+from redis import Redis
+
 from .forms import TrustMarkForm
-from .lib import add_trustmark
+from .lib import TrustMarkRequest, add_trustmark
 from .models import TrustMark, TrustMarkType
 
 # Create your views here.
 
 
-def index(request):
+def index(request: HttpRequest):
     return render(request, "trustmarks/index.html")
 
 
-def listtrustmarks(request):
-    trust_mark_list= TrustMark.objects.all()
+def listtrustmarks(request: HttpRequest):
+    trust_mark_list = TrustMark.objects.all()
     paginator = Paginator(trust_mark_list, 3)
 
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
     return render(request, "trustmarks/list.html", {"page_obj": page_obj})
 
-def addtrustmark(request):
+
+def addtrustmark(request: HttpRequest) -> HttpResponse:
     msg = ""
     tmts = TrustMarkType.objects.all()
 
@@ -31,23 +34,25 @@ def addtrustmark(request):
         form = TrustMarkForm(request.POST)
         # check whether it's valid:
         if form.is_valid():
-            entity = form.data["entity"]
-            tmt = form.data["tmt_select"]
+            tmr = TrustMarkRequest(
+                entity=form.data["entity"], tmt_select=form.data["tmt_select"]
+            )
             try:
-                trust_mark_type = TrustMarkType.objects.get(id=tmt)
-                t = TrustMark(tmt=trust_mark_type, domain=entity, active=True)
+                trust_mark_type = TrustMarkType.objects.get(id=tmr.tmt_select)
+                t = TrustMark(tmt=trust_mark_type, domain=tmr.entity, active=True)
                 # save to database
                 t.save()
-                con = get_redis_connection("default")
+                con: Redis = get_redis_connection("default")
                 # Next create the actual trustmark
-                trust_mark = add_trustmark(entity, trust_mark_type.tmtype, con)
-                msg = f"Added {entity}"
+                _trust_mark = add_trustmark(tmr.entity, trust_mark_type.tmtype, con)
+                msg = f"Added {tmr.entity}"
             except IntegrityError:
-                msg = f"{entity} was already added for the selected Trust mark."
+                msg = f"{tmr.entity} was already added for the selected Trust mark."
         else:
             print("invalid form")
+            msg = "Form validation failed."
     else:
-        print("bad form")
+        print("Bad request.")
         form = TrustMarkForm(request.POST)
 
     return render(

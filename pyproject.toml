@@ -19,3 +19,12 @@ inmor_add_sub = "pyinmor:add_sub_main"
 
 [project.urls]
 Home = "https://github.com/kushaldas/pyinmor"
+
+[tool.pyright]
+
+stubPath = "typings"
+reportAny = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportExplicitAny = false

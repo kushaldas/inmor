@@ -1,16 +1,22 @@
 import json
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, cast
 
 import httpx
 from django.conf import settings
 from jwcrypto import jwt
 from jwcrypto.jwk import JWK, JWKSet
+from jwcrypto.jwt import JWT
+from pydantic import BaseModel
 
 from redis import Redis
 
 logger = logging.getLogger(__name__)
+
+
+class SubordinateRequest(BaseModel):
+    entity: str
 
 
 def add_subordinate(entity_id: str, r: Redis):
@@ -21,7 +27,7 @@ def add_subordinate(entity_id: str, r: Redis):
     """
     resp = httpx.get(f"{entity_id}/.well-known/openid-federation")
     text = resp.text
-    jwt_net = jwt.JWT.from_jose_token(text)
+    jwt_net: JWT = jwt.JWT.from_jose_token(text)
     # FIXME: In future we will need the proper key to verify the signature and use only
     # validated contain.
     payload = json.loads(jwt_net.token.objects.get("payload").decode("utf-8"))
@@ -54,12 +60,12 @@ def add_subordinate(entity_id: str, r: Redis):
     token.make_signed_token(key)
     token_data = token.serialize()
     # Now we should set it in the redis
-    r.hset("inmor:subordinates", sub_data["sub"], token_data)
-    # FIXME: Add the entity in the queue for walking the tree (if any)
-    r.lpush("inmor:newsubordinate", entity_id)
+    _ = r.hset("inmor:subordinates", sub_data["sub"], token_data)
+    # Add the entity in the queue for walking the tree (if any)
+    _ = r.lpush("inmor:newsubordinate", entity_id)
 
 
-def self_validate(token: jwt.JWT):
+def self_validate(token: jwt.JWT) -> dict[str, Any]:
     """Self validates a JWT with JWKS from it."""
     try:
         payload = json.loads(token.token.objects.get("payload").decode("utf-8"))
@@ -81,14 +87,14 @@ def fetch_payload(entity_id: str):
     if resp.status_code != 200:
         raise Exception(f"Fetching payload returns {resp.status_code} for {entity_id}")
     text = resp.text
-    jwt_net = jwt.JWT.from_jose_token(text)
+    jwt_net: jwt.JWT = jwt.JWT.from_jose_token(text)
     # FIXME: In future we will need the proper key to verify the signature and use only
     # validated contain.
     payload = self_validate(jwt_net)
     return payload, text
 
 
-def fetch_subordinate_statements(authority_hints: List[str], entity_id: str, r: Redis):
+def fetch_subordinate_statements(authority_hints: list[str], entity_id: str, r: Redis):
     """Fetches subordinate statements from the authority hints.
 
     :args authority_hints: A list of authority hints from entity config.
@@ -124,10 +130,10 @@ def fetch_subordinate_statements(authority_hints: List[str], entity_id: str, r: 
             text = resp.text
             if text:
                 # now we can just set that for future calls
-                r.hset("inmor:subordinate_query", url, text)
+                _ = r.hset("inmor:subordinate_query", url, text)
 
 
-def tree_walking(entity_id: str, r: Redis, visited: Optional[set] = None):
+def tree_walking(entity_id: str, r: Redis, visited: set[str] | None = None):
     """Discovers a tree from the given entity_id.
 
     :args entity_id: The entity_id to be added
@@ -143,7 +149,7 @@ def tree_walking(entity_id: str, r: Redis, visited: Optional[set] = None):
     # Add to the visited list
     visited.add(entity_id)
     # Add to the entity hash in redis
-    r.hset("inmor:entities", entity_id, jwt_net)
+    _ = r.hset("inmor:entities", entity_id, jwt_net)
 
     # Visit authorities for subordinate statements
     authority_hints = payload.get("authority_hints")
@@ -151,18 +157,18 @@ def tree_walking(entity_id: str, r: Redis, visited: Optional[set] = None):
         fetch_subordinate_statements(authority_hints, entity_id, r)
 
     # Now the actual discovery
-    metadata = payload.get("metadata")
+    metadata = cast(dict[str, Any], payload.get("metadata"))
     if "openid_relying_party" in metadata:
         # Mweans RP
-        r.sadd("inmor:rp", entity_id)
+        _ = r.sadd("inmor:rp", entity_id)
         pass
     elif "openid_provider" in metadata:
         # Means  OP
-        r.sadd("inmor:op", entity_id)
+        _ = r.sadd("inmor:op", entity_id)
         pass
     else:  # means "federation_entity" in metadata:
         # Means we have a TA/IA
-        r.sadd("inmor:taia", entity_id)
+        _ = r.sadd("inmor:taia", entity_id)
         list_endpoint = metadata["federation_entity"].get("federation_list_endpoint")
         if not list_endpoint:
             logger.warning(f"{entity_id} does not have a list endpoint")
@@ -189,4 +195,4 @@ def tree_walking(entity_id: str, r: Redis, visited: Optional[set] = None):
 if __name__ == "__main__":
     r = Redis("redis")
     logging.basicConfig(level=logging.INFO)
-    tree_walking("", r)
+    _ = tree_walking("", r)
