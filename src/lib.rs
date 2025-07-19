@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use log::debug;
 use redis::Client;
 use reqwest::blocking;
-use std::fmt::format;
+use std::fmt::{format, Display};
 
 use actix_web::{
     App, HttpRequest, HttpResponse, HttpServer, Responder, error, get, middleware, post, web,
@@ -93,15 +93,36 @@ impl VerifiedJWT {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct URL(String);
+impl Deref for URL {
+    type Target = String;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for URL {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Clone for URL {
+    fn clone(&self) -> Self {
+        URL(self.0.clone())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Endpoints {
-    fetch: String,
-    list: String,
-    resolve: String,
+    fetch: URL,
+    list: URL,
+    resolve: URL,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServerConfiguration {
-    pub domain: String,
+    pub domain: URL,
     pub endpoints: Endpoints,
 }
 
@@ -109,11 +130,11 @@ pub struct ServerConfiguration {
 impl ServerConfiguration {
     pub fn new(domain: &str) -> ServerConfiguration {
         ServerConfiguration {
-            domain: String::from(domain),
+            domain: URL(String::from(domain)),
             endpoints: Endpoints {
-                fetch: (format!("{}/fetch", domain)),
-                list: (format!("{}/list", domain)),
-                resolve: (format!("{}/resolve", domain)),
+                fetch: URL(format!("{}/fetch", domain)),
+                list: URL(format!("{}/list", domain)),
+                resolve: URL(format!("{}/resolve", domain)),
             },
         }
     }
