@@ -7,11 +7,15 @@ import httpx
 from django.conf import settings
 from jwcrypto import jwt
 from jwcrypto.jwk import JWK, JWKSet
+from pydantic import BaseModel
 
 from redis import Redis
 
 logger = logging.getLogger(__name__)
 
+
+class SubordinateRequest(BaseModel):
+    entity: str
 
 def add_subordinate(entity_id: str, r: Redis):
     """Adds a new subordinate to the federation.

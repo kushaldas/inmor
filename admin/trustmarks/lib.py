@@ -37,7 +37,7 @@ def add_trustmark(entity: str, trustmarktype: str, r: redis.Redis) -> str:
     token_data = token.serialize()
     # Now we should set it in the redis
     # First, the trustmark for the entity and that trustmarktype
-    r.hset(f"inmor:tm:{entity}", trustmarktype, token_data)
+    _ = r.hset(f"inmor:tm:{entity}", trustmarktype, token_data)
     # second, add to the set of trust_mark_type
-    r.sadd(f"inmor:tmtype:{trustmarktype}", entity)
+    _ = r.sadd(f"inmor:tmtype:{trustmarktype}", entity)
     return token_data
