@@ -25,3 +25,6 @@ Home = "https://github.com/kushaldas/pyinmor"
 stubPath = "typings"
 reportAny = false
 reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportExplicitAny = false

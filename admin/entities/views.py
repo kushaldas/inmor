@@ -16,12 +16,13 @@ def index(request: HttpRequest) -> HttpResponse:
 
 
 def list_subordinates(request: HttpRequest) -> HttpResponse:
-    subordinate_list= Subordinate.objects.all()
+    subordinate_list = Subordinate.objects.all()
     paginator = Paginator(subordinate_list, 3)
 
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
     return render(request, "entities/list.html", {"page_obj": page_obj})
+
 
 def add_subordinate_entity(request: HttpRequest) -> HttpResponse:
     msg = ""
@@ -52,5 +53,6 @@ def add_subordinate_entity(request: HttpRequest) -> HttpResponse:
         "entities/add.html",
         {"form": form, "msg": msg},
     )
+
 
 # Create your views here.
