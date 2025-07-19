@@ -11,6 +11,8 @@ pysaml2
 djangosaml2
 django-redis
 jwcrypto
+types-jwcrypto
 httpx
 django-click
 pydantic
+ty

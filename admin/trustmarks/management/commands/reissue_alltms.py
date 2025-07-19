@@ -1,5 +1,4 @@
 import djclick as click
-from django.conf import settings
 from django_redis import get_redis_connection
 from trustmarks.lib import add_trustmark
 from trustmarks.models import TrustMark

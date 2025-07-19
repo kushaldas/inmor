@@ -14,9 +14,6 @@ dependencies = [
 	"redis"
 ]
 
-[project.scripts]
-inmor_add_sub = "pyinmor:add_sub_main"
-
 [project.urls]
 Home = "https://github.com/kushaldas/pyinmor"
 
