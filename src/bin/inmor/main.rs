@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use redis::Client;
 use std::fmt::format;
 use std::{env, io};
-
+use std::ops::Deref;
 use actix_web::{
     App, HttpRequest, HttpResponse, HttpServer, Responder, error, get, middleware, web,
 };
@@ -69,41 +69,6 @@ async fn index() -> impl Responder {
     "Index page."
 }
 
-// This function will read the configuration files in future.
-// TODO: maybe returning a better structure from here instead of Value
-fn read_configuration() -> Value {
-    // HACK: Fixed domain name for now
-    let domain = match env::var("TA_DOMAIN") {
-        Ok(d) => d,
-        Err(_) => "http://localhost:8080".to_string(),
-    };
-    let mut map = Map::new();
-    map.insert(
-        "federation_fetch_endpoint".to_string(),
-        json!(format!("{}/fetch", domain)),
-    );
-
-    // list endpoint
-    map.insert(
-        "federation_list_endpoint".to_string(),
-        json!(format!("{}/list", domain)),
-    );
-    // resolve endpoint
-    map.insert(
-        "federation_resolve_endpoint".to_string(),
-        json!(format!("{}/resolve", domain)),
-    );
-
-    // Now the final big map to return
-    let mut fed = Map::new();
-    fed.insert("federation_entity".to_string(), json!(map));
-
-    // TODO: Add any other metadata below
-    // Example: Trustmarks
-
-    json!(fed)
-}
-
 /// Sets the given entity_id of the application to the redis server.
 /// Thus in future we can return the same entity_id details without creating the JWT again & again.
 fn set_app_entity_data(entity_data: &str, redis: Client) {
@@ -151,13 +116,10 @@ async fn list_subordinates(redis: web::Data<redis::Client>) -> actix_web::Result
 #[actix_web::main]
 async fn main() -> io::Result<()> {
     // Start of new signed entity_id for the application
-    let meta = read_configuration();
-    let domain = match env::var("TA_DOMAIN") {
-        Ok(d) => d,
-        Err(_) => "http://localhost:8080".to_string(),
-    };
-
-    let entity_data = compile_entityid(&format!("{domain}/"), &domain, Some(meta)).unwrap();
+    let server_config = ServerConfiguration::from_env();
+    let mut federation_entity = Map::new();
+    federation_entity.insert("federation_entity".to_string(), json!(server_config.endpoints));
+    let entity_data = compile_entityid(&format!("{}/", &server_config.domain), &server_config.domain, json!(federation_entity).into()).unwrap();
     println!("{entity_data:?}");
 
     // Now the normal web app flow
@@ -175,7 +137,7 @@ async fn main() -> io::Result<()> {
         //
         App::new()
             .app_data(web::Data::new(AppState {
-                entity_id: domain.to_string(),
+                entity_id: server_config.domain.to_string(),
                 public_keyset: jwks,
             }))
             .app_data(web::Data::new(redis.clone()))

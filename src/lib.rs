@@ -26,6 +26,8 @@ use serde::Serialize;
 use serde::{Deserialize, de::Error};
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
+use std::env;
+use std::ops::Deref;
 use std::time::{Duration, SystemTime};
 
 lazy_static! {
@@ -87,6 +89,39 @@ impl VerifiedJWT {
             substatement: subs,
             taresult,
         }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Endpoints {
+    fetch: String,
+    list: String,
+    resolve: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ServerConfiguration {
+    pub domain: String,
+    pub endpoints: Endpoints,
+}
+
+
+impl ServerConfiguration {
+    pub fn new(domain: &str) -> ServerConfiguration {
+        ServerConfiguration {
+            domain: String::from(domain),
+            endpoints: Endpoints {
+                fetch: (format!("{}/fetch", domain)),
+                list: (format!("{}/list", domain)),
+                resolve: (format!("{}/resolve", domain)),
+            },
+        }
+    }
+
+    // Constructs a instance of ServerConfiguration by fetching required values from env vars
+    pub fn from_env() -> ServerConfiguration {
+        let domain = env::var("TA_DOMAIN").unwrap_or("http://localhost:8080".to_string());
+        ServerConfiguration::new(&domain)
     }
 }
 
