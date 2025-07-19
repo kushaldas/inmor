@@ -14,8 +14,10 @@ dev: venv
 
 # To check for formatting and typing erors
 lint: venv
+  # The Python code is not packaged, so imports are currently
+  # relative to the admin/ directory
   source .venv/bin/activate && \
-  mypy . && \
+  ty check . --extra-search-path=admin/ && \
   ruff check .
 
 # To remove the files of the dev environment

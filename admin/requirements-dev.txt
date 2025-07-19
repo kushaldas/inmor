@@ -15,4 +15,4 @@ types-jwcrypto
 httpx
 django-click
 pydantic
-mypy
+ty
