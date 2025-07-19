@@ -142,9 +142,9 @@ impl ServerConfiguration {
         ServerConfiguration {
             domain: URL(String::from(domain)),
             endpoints: Endpoints {
-                fetch: URL(format!("{}/fetch", domain)),
-                list: URL(format!("{}/list", domain)),
-                resolve: URL(format!("{}/resolve", domain)),
+                fetch: URL(format!("{domain}/fetch")),
+                list: URL(format!("{domain}/list")),
+                resolve: URL(format!("{domain}/resolve")),
             },
         }
     }
