@@ -1,7 +1,12 @@
-#!/usr/bin/env python
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "jwcrypto",
+# ]
+# ///
 from jwcrypto import jwk
 
-key = jwk.JWK.generate(kty='RSA', size=2048, use="sig") 
+key = jwk.JWK.generate(kty="RSA", size=2048, use="sig")
 key.kid = key.thumbprint()
 data = key.export_public()
 with open("public.json", "w") as f:

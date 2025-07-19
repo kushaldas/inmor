@@ -6,4 +6,4 @@ _default:
 dev:
   uv venv
   uv pip install -r admin/requirements-dev.txt
-  ./scripts/create-keys.py
+  uv run scripts/create-keys.py
