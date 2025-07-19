@@ -113,14 +113,24 @@ impl Clone for URL {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct Endpoints {
     fetch: URL,
     list: URL,
     resolve: URL,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+impl Endpoints {
+    pub fn to_openid_metadata(&self) -> Value {
+        let mut ret = Map::new();
+        ret.insert("federation_fetch_endpoint".to_string(), json!(self.fetch));
+        ret.insert("federation_list_endpoint".to_string(), json!(self.list));
+        ret.insert("federation_resolve_endpoint".to_string(), json!(self.resolve));
+        json!(ret)
+    }
+}
+
+#[derive(Debug)]
 pub struct ServerConfiguration {
     pub domain: URL,
     pub endpoints: Endpoints,

@@ -118,7 +118,7 @@ async fn main() -> io::Result<()> {
     // Start of new signed entity_id for the application
     let server_config = ServerConfiguration::from_env();
     let mut federation_entity = Map::new();
-    federation_entity.insert("federation_entity".to_string(), json!(server_config.endpoints));
+    federation_entity.insert("federation_entity".to_string(), server_config.endpoints.to_openid_metadata());
     let entity_data = compile_entityid(&format!("{}/", &server_config.domain), &server_config.domain, json!(federation_entity).into()).unwrap();
     println!("{entity_data:?}");
 
