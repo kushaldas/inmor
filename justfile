@@ -23,6 +23,11 @@ lint: venv
   cargo clippy
   cargo fmt --check
 
+# To format the Rust and Python code
+reformat: venv
+  ruff format
+  cargo fmt
+
 # To remove the files of the dev environment
 clean:
   rm -rf .venv
