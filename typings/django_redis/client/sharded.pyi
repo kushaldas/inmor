@@ -12,37 +12,26 @@ from django_redis.client.default import DefaultClient
 
 class ShardClient(DefaultClient):
     _findhash = ...
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args, **kwargs) -> None: ...
+    def get_client(self, *args, **kwargs): ...
+    def connect(self, index=...):  # -> dict[Any, Any]:
         ...
-    
-    def get_client(self, *args, **kwargs):
+    def get_server_name(self, _key):  # -> str | None:
         ...
-    
-    def connect(self, index=...): # -> dict[Any, Any]:
+    def get_server(self, key): ...
+    def add(self, key, value, timeout=..., version=..., client=...):  # -> bool:
         ...
-    
-    def get_server_name(self, _key): # -> str | None:
+    def get(self, key, default=..., version=..., client=...):  # -> Any:
         ...
-    
-    def get_server(self, key):
+    def get_many(self, keys, version=...):  # -> dict[Any, Any] | OrderedDict[Any, Any]:
         ...
-    
-    def add(self, key, value, timeout=..., version=..., client=...): # -> bool:
-        ...
-    
-    def get(self, key, default=..., version=..., client=...): # -> Any:
-        ...
-    
-    def get_many(self, keys, version=...): # -> dict[Any, Any] | OrderedDict[Any, Any]:
-        ...
-    
-    def set(self, key, value, timeout=..., version=..., client=..., nx=..., xx=...): # -> bool:
+    def set(self, key, value, timeout=..., version=..., client=..., nx=..., xx=...):  # -> bool:
         """
         Persist a value to the cache, and set an optional expiration time.
         """
         ...
-    
-    def set_many(self, data, timeout=..., version=..., client=...): # -> None:
+
+    def set_many(self, data, timeout=..., version=..., client=...):  # -> None:
         """
         Set a bunch of values in the cache at once from a dict of key/value
         pairs. This is much more efficient than calling set() multiple times.
@@ -51,126 +40,161 @@ class ShardClient(DefaultClient):
         the default cache timeout will be used.
         """
         ...
-    
-    def has_key(self, key, version=..., client=...): # -> bool | Any:
+
+    def has_key(self, key, version=..., client=...):  # -> bool | Any:
         """
         Test if key exists.
         """
         ...
-    
-    def delete(self, key, version=..., client=...): # -> int:
+
+    def delete(self, key, version=..., client=...):  # -> int:
         ...
-    
-    def ttl(self, key, version=..., client=...): # -> int | None:
+    def ttl(self, key, version=..., client=...):  # -> int | None:
         """
         Executes TTL redis command and return the "time-to-live" of specified key.
         If key is a non volatile key, it returns None.
         """
         ...
-    
-    def pttl(self, key, version=..., client=...): # -> int | None:
+
+    def pttl(self, key, version=..., client=...):  # -> int | None:
         """
         Executes PTTL redis command and return the "time-to-live" of specified key
         in milliseconds. If key is a non volatile key, it returns None.
         """
         ...
-    
-    def persist(self, key, version=..., client=...): # -> bool:
+
+    def persist(self, key, version=..., client=...):  # -> bool:
         ...
-    
-    def expire(self, key, timeout, version=..., client=...): # -> bool:
+    def expire(self, key, timeout, version=..., client=...):  # -> bool:
         ...
-    
-    def pexpire(self, key, timeout, version=..., client=...): # -> bool:
+    def pexpire(self, key, timeout, version=..., client=...):  # -> bool:
         ...
-    
-    def pexpire_at(self, key, when: Union[datetime, int], version=..., client=...): # -> bool:
+    def pexpire_at(self, key, when: Union[datetime, int], version=..., client=...):  # -> bool:
         """
         Set an expire flag on a ``key`` to ``when`` on a shard client.
         ``when`` which can be represented as an integer indicating unix
         time or a Python datetime object.
         """
         ...
-    
-    def expire_at(self, key, when: Union[datetime, int], version=..., client=...): # -> bool:
+
+    def expire_at(self, key, when: Union[datetime, int], version=..., client=...):  # -> bool:
         """
         Set an expire flag on a ``key`` to ``when`` on a shard client.
         ``when`` which can be represented as an integer indicating unix
         time or a Python datetime object.
         """
         ...
-    
-    def lock(self, key, version=..., timeout=..., sleep=..., blocking_timeout=..., client=..., thread_local=...): # -> Any:
+
+    def lock(
+        self,
+        key,
+        version=...,
+        timeout=...,
+        sleep=...,
+        blocking_timeout=...,
+        client=...,
+        thread_local=...,
+    ):  # -> Any:
         ...
-    
-    def delete_many(self, keys, version=...): # -> int:
+    def delete_many(self, keys, version=...):  # -> int:
         """
         Remove multiple keys at once.
         """
         ...
-    
-    def incr_version(self, key, delta=..., version=..., client=...): # -> int:
+
+    def incr_version(self, key, delta=..., version=..., client=...):  # -> int:
         ...
-    
-    def incr(self, key, delta=..., version=..., client=...): # -> int:
+    def incr(self, key, delta=..., version=..., client=...):  # -> int:
         ...
-    
-    def decr(self, key, delta=..., version=..., client=...): # -> int:
+    def decr(self, key, delta=..., version=..., client=...):  # -> int:
         ...
-    
-    def iter_keys(self, key, version=...):
+    def iter_keys(self, key, version=...): ...
+    def keys(self, search, version=...):  # -> list[Any]:
         ...
-    
-    def keys(self, search, version=...): # -> list[Any]:
-        ...
-    
-    def delete_pattern(self, pattern, version=..., client=..., itersize=..., prefix=...): # -> Literal[0]:
+    def delete_pattern(
+        self, pattern, version=..., client=..., itersize=..., prefix=...
+    ):  # -> Literal[0]:
         """
         Remove all keys matching pattern.
         """
         ...
-    
-    def do_close_clients(self): # -> None:
-        ...
-    
-    def touch(self, key, timeout=..., version=..., client=...): # -> bool:
-        ...
-    
-    def clear(self, client=...): # -> None:
-        ...
-    
-    def sadd(self, key: KeyT, *values: Any, version: Optional[int] = ..., client: Optional[Redis] = ...) -> int:
-        ...
-    
-    def scard(self, key: KeyT, version: Optional[int] = ..., client: Optional[Redis] = ...) -> int:
-        ...
-    
-    def smembers(self, key: KeyT, version: Optional[int] = ..., client: Optional[Redis] = ...) -> builtins.set[Any]:
-        ...
-    
-    def smove(self, source: KeyT, destination: KeyT, member: Any, version: Optional[int] = ..., client: Optional[Redis] = ...): # -> bool:
-        ...
-    
-    def srem(self, key: KeyT, *members, version: Optional[int] = ..., client: Optional[Redis] = ...) -> int:
-        ...
-    
-    def sscan(self, key: KeyT, match: Optional[str] = ..., count: Optional[int] = ..., version: Optional[int] = ..., client: Optional[Redis] = ...) -> builtins.set[Any]:
-        ...
-    
-    def sscan_iter(self, key: KeyT, match: Optional[str] = ..., count: Optional[int] = ..., version: Optional[int] = ..., client: Optional[Redis] = ...) -> Iterator[Any]:
-        ...
-    
-    def srandmember(self, key: KeyT, count: Optional[int] = ..., version: Optional[int] = ..., client: Optional[Redis] = ...) -> Union[builtins.set, Any]:
-        ...
-    
-    def sismember(self, key: KeyT, member: Any, version: Optional[int] = ..., client: Optional[Redis] = ...) -> bool:
-        ...
-    
-    def spop(self, key: KeyT, count: Optional[int] = ..., version: Optional[int] = ..., client: Optional[Redis] = ...) -> Union[builtins.set, Any]:
-        ...
-    
-    def smismember(self, key: KeyT, *members, version: Optional[int] = ..., client: Optional[Redis] = ...) -> list[bool]:
-        ...
-    
 
-
+    def do_close_clients(self):  # -> None:
+        ...
+    def touch(self, key, timeout=..., version=..., client=...):  # -> bool:
+        ...
+    def clear(self, client=...):  # -> None:
+        ...
+    def sadd(
+        self,
+        key: KeyT,
+        *values: Any,
+        version: Optional[int] = ...,
+        client: Optional[Redis] = ...,
+    ) -> int: ...
+    def scard(
+        self, key: KeyT, version: Optional[int] = ..., client: Optional[Redis] = ...
+    ) -> int: ...
+    def smembers(
+        self, key: KeyT, version: Optional[int] = ..., client: Optional[Redis] = ...
+    ) -> builtins.set[Any]: ...
+    def smove(
+        self,
+        source: KeyT,
+        destination: KeyT,
+        member: Any,
+        version: Optional[int] = ...,
+        client: Optional[Redis] = ...,
+    ):  # -> bool:
+        ...
+    def srem(
+        self,
+        key: KeyT,
+        *members,
+        version: Optional[int] = ...,
+        client: Optional[Redis] = ...,
+    ) -> int: ...
+    def sscan(
+        self,
+        key: KeyT,
+        match: Optional[str] = ...,
+        count: Optional[int] = ...,
+        version: Optional[int] = ...,
+        client: Optional[Redis] = ...,
+    ) -> builtins.set[Any]: ...
+    def sscan_iter(
+        self,
+        key: KeyT,
+        match: Optional[str] = ...,
+        count: Optional[int] = ...,
+        version: Optional[int] = ...,
+        client: Optional[Redis] = ...,
+    ) -> Iterator[Any]: ...
+    def srandmember(
+        self,
+        key: KeyT,
+        count: Optional[int] = ...,
+        version: Optional[int] = ...,
+        client: Optional[Redis] = ...,
+    ) -> Union[builtins.set, Any]: ...
+    def sismember(
+        self,
+        key: KeyT,
+        member: Any,
+        version: Optional[int] = ...,
+        client: Optional[Redis] = ...,
+    ) -> bool: ...
+    def spop(
+        self,
+        key: KeyT,
+        count: Optional[int] = ...,
+        version: Optional[int] = ...,
+        client: Optional[Redis] = ...,
+    ) -> Union[builtins.set, Any]: ...
+    def smismember(
+        self,
+        key: KeyT,
+        *members,
+        version: Optional[int] = ...,
+        client: Optional[Redis] = ...,
+    ) -> list[bool]: ...

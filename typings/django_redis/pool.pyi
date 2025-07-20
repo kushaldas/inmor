@@ -7,23 +7,23 @@ from redis.connection import ConnectionPool
 
 class ConnectionFactory:
     _pools: dict[str, ConnectionPool] = ...
-    def __init__(self, options) -> None:
-        ...
-    
-    def make_connection_params(self, url): # -> dict[str, Any | type[_RESP2Parser] | type[_RESP3Parser] | type[_HiredisParser]]:
+    def __init__(self, options) -> None: ...
+    def make_connection_params(
+        self, url
+    ):  # -> dict[str, Any | type[_RESP2Parser] | type[_RESP3Parser] | type[_HiredisParser]]:
         """
         Given a main connection parameters, build a complete
         dict of connection parameters.
         """
         ...
-    
+
     def connect(self, url: str) -> Redis:
         """
         Given a basic connection parameters,
         return a new connection.
         """
         ...
-    
+
     def disconnect(self, connection: Redis) -> None:
         """
         Given a not null client connection it disconnect from the Redis server.
@@ -31,8 +31,8 @@ class ConnectionFactory:
         The default implementation uses a pool to hold connections.
         """
         ...
-    
-    def get_connection(self, params): # -> Any:
+
+    def get_connection(self, params):  # -> Any:
         """
         Given a now preformatted params, return a
         new connection.
@@ -41,11 +41,12 @@ class ConnectionFactory:
         for create new connection.
         """
         ...
-    
-    def get_parser_cls(self): # -> type[_RESP2Parser] | type[_RESP3Parser] | type[_HiredisParser] | Any:
+
+    def get_parser_cls(
+        self,
+    ):  # -> type[_RESP2Parser] | type[_RESP3Parser] | type[_HiredisParser] | Any:
         ...
-    
-    def get_or_create_connection_pool(self, params): # -> ConnectionPool:
+    def get_or_create_connection_pool(self, params):  # -> ConnectionPool:
         """
         Given a connection parameters and return a new
         or cached connection pool for them.
@@ -54,8 +55,8 @@ class ConnectionFactory:
         connection pool instance caching behavior.
         """
         ...
-    
-    def get_connection_pool(self, params): # -> Any:
+
+    def get_connection_pool(self, params):  # -> Any:
         """
         Given a connection parameters, return a new
         connection pool for them.
@@ -64,22 +65,15 @@ class ConnectionFactory:
         behavior on creating connection pool.
         """
         ...
-    
-
 
 class SentinelConnectionFactory(ConnectionFactory):
-    def __init__(self, options) -> None:
-        ...
-    
-    def get_connection_pool(self, params): # -> Any:
+    def __init__(self, options) -> None: ...
+    def get_connection_pool(self, params):  # -> Any:
         """
         Given a connection parameters, return a new sentinel connection pool
         for them.
         """
         ...
-    
 
-
-def get_connection_factory(path=..., options=...): # -> Any:
+def get_connection_factory(path=..., options=...):  # -> Any:
     ...
-

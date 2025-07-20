@@ -6,7 +6,10 @@ from typing import Any, Callable, Optional
 from django.core.cache.backends.base import BaseCache
 
 CONNECTION_INTERRUPTED = ...
-def omit_exception(method: Optional[Callable] = ..., return_value: Optional[Any] = ...): # -> partial[Any] | _Wrapped[..., Any, ..., Any | None]:
+
+def omit_exception(
+    method: Optional[Callable] = ..., return_value: Optional[Any] = ...
+):  # -> partial[Any] | _Wrapped[..., Any, ..., Any | None]:
     """
     Simple decorator that intercepts connection
     errors and ignores these if settings specify this.
@@ -14,203 +17,153 @@ def omit_exception(method: Optional[Callable] = ..., return_value: Optional[Any]
     ...
 
 class RedisCache(BaseCache):
-    def __init__(self, server: str, params: dict[str, Any]) -> None:
-        ...
-    
+    def __init__(self, server: str, params: dict[str, Any]) -> None: ...
     @property
-    def client(self): # -> Any:
+    def client(self):  # -> Any:
         """
         Lazy client connection property.
         """
         ...
-    
+
     @omit_exception
-    def set(self, *args, **kwargs): # -> Any:
+    def set(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def incr_version(self, *args, **kwargs): # -> Any:
+    def incr_version(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def add(self, *args, **kwargs): # -> Any:
+    def add(self, *args, **kwargs):  # -> Any:
         ...
-    
-    def get(self, key, default=..., version=..., client=...): # -> Any | None:
+    def get(self, key, default=..., version=..., client=...):  # -> Any | None:
         ...
-    
     @omit_exception
-    def delete(self, *args, **kwargs): # -> bool | Any:
+    def delete(self, *args, **kwargs):  # -> bool | Any:
         """returns a boolean instead of int since django version 3.1"""
         ...
-    
+
     @omit_exception
-    def delete_pattern(self, *args, **kwargs): # -> Any:
+    def delete_pattern(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def delete_many(self, *args, **kwargs): # -> Any:
+    def delete_many(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def clear(self): # -> Any:
+    def clear(self):  # -> Any:
         ...
-    
     @omit_exception(return_value={})
-    def get_many(self, *args, **kwargs): # -> Any:
+    def get_many(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def set_many(self, *args, **kwargs): # -> Any:
+    def set_many(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def incr(self, *args, **kwargs): # -> Any:
+    def incr(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def decr(self, *args, **kwargs): # -> Any:
+    def decr(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def has_key(self, *args, **kwargs): # -> Any:
+    def has_key(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def keys(self, *args, **kwargs): # -> Any:
+    def keys(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def iter_keys(self, *args, **kwargs): # -> Any:
+    def iter_keys(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def ttl(self, *args, **kwargs): # -> Any:
+    def ttl(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def pttl(self, *args, **kwargs): # -> Any:
+    def pttl(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def persist(self, *args, **kwargs): # -> Any:
+    def persist(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def expire(self, *args, **kwargs): # -> Any:
+    def expire(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def expire_at(self, *args, **kwargs): # -> Any:
+    def expire_at(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def pexpire(self, *args, **kwargs): # -> Any:
+    def pexpire(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def pexpire_at(self, *args, **kwargs): # -> Any:
+    def pexpire_at(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def lock(self, *args, **kwargs): # -> Any:
+    def lock(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def close(self, **kwargs): # -> None:
+    def close(self, **kwargs):  # -> None:
         ...
-    
     @omit_exception
-    def touch(self, *args, **kwargs): # -> Any:
+    def touch(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def sadd(self, *args, **kwargs): # -> Any:
+    def sadd(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def scard(self, *args, **kwargs): # -> Any:
+    def scard(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def sdiff(self, *args, **kwargs): # -> Any:
+    def sdiff(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def sdiffstore(self, *args, **kwargs): # -> Any:
+    def sdiffstore(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def sinter(self, *args, **kwargs): # -> Any:
+    def sinter(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def sinterstore(self, *args, **kwargs): # -> Any:
+    def sinterstore(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def sismember(self, *args, **kwargs): # -> Any:
+    def sismember(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def smembers(self, *args, **kwargs): # -> Any:
+    def smembers(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def smove(self, *args, **kwargs): # -> Any:
+    def smove(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def spop(self, *args, **kwargs): # -> Any:
+    def spop(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def srandmember(self, *args, **kwargs): # -> Any:
+    def srandmember(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def srem(self, *args, **kwargs): # -> Any:
+    def srem(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def sscan(self, *args, **kwargs): # -> Any:
+    def sscan(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def sscan_iter(self, *args, **kwargs): # -> Any:
+    def sscan_iter(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def smismember(self, *args, **kwargs): # -> Any:
+    def smismember(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def sunion(self, *args, **kwargs): # -> Any:
+    def sunion(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def sunionstore(self, *args, **kwargs): # -> Any:
+    def sunionstore(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def hset(self, *args, **kwargs): # -> Any:
+    def hset(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def hdel(self, *args, **kwargs): # -> Any:
+    def hdel(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def hlen(self, *args, **kwargs): # -> Any:
+    def hlen(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def hkeys(self, *args, **kwargs): # -> Any:
+    def hkeys(self, *args, **kwargs):  # -> Any:
         ...
-    
     @omit_exception
-    def hexists(self, *args, **kwargs): # -> Any:
+    def hexists(self, *args, **kwargs):  # -> Any:
         ...
-    
-
-
