@@ -18,7 +18,10 @@ lint: venv
   # relative to the admin/ directory
   . .venv/bin/activate && \
   ty check . --extra-search-path=admin/ && \
+  ruff format --check && \
   ruff check .
+  cargo clippy
+  cargo fmt --check
 
 # To remove the files of the dev environment
 clean:
