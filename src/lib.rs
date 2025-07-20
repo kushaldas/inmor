@@ -26,9 +26,11 @@ use serde::Serialize;
 use serde::{Deserialize, de::Error};
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
-use std::env;
+use std::{env, fs, };
+use std::error::Error as StdError;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
+use actix_web::http::uri::Parts;
 
 lazy_static! {
     static ref PUBLIEC_KEY: Vec<u8> = std::fs::read("./public.json").unwrap();
@@ -113,11 +115,22 @@ impl Clone for URL {
     }
 }
 
-#[derive(Debug)]
+// TODO: encode the OpenID spec's requirements into the type system. Not to do runtime validation (primarily)
+//      but to ensure that developers pass the correct properties to the correct places.
+//      For now everything is just URL but the specs allows different things for different endpoints.
+//      See e.g. https://openid.net/specs/openid-federation-1_0.html#section-5.1.1-4.2
+
+#[derive(Debug, Deserialize)]
 pub struct Endpoints {
     fetch: URL,
     list: URL,
     resolve: URL,
+    // trust_mark_status: URL,
+    // trust_mark_list: URL,
+    // trust_mark: URL,
+    // historical_keys: URL,
+    // auth_signing_alg_values_supported: URL,
+    // signed_jwks_uri: URL,
 }
 
 impl Endpoints {
@@ -128,31 +141,67 @@ impl Endpoints {
         ret.insert("federation_resolve_endpoint".to_string(), json!(self.resolve));
         json!(ret)
     }
+
+    pub fn from_domain(domain: &str) -> Self {
+        Self{
+            fetch: URL(format!("{domain}/fetch")),
+            list: URL(format!("{domain}/list")),
+            resolve: URL(format!("{domain}/resolve")),
+        }
+    }
 }
 
-#[derive(Debug)]
+impl Default for Endpoints {
+    fn default() -> Self {
+        Self::from_domain("0.0.0.0")
+    }
+}
+
+fn default_loglevel() -> String { "info".to_string() }
+
+#[derive(Debug, Deserialize)]
 pub struct ServerConfiguration {
     pub domain: URL,
+    pub redis_uri: String,
+
+    #[serde(skip)]
     pub endpoints: Endpoints,
+
+    #[serde(default = "default_loglevel")]
+    pub loglevel: String,
 }
 
-
 impl ServerConfiguration {
-    pub fn new(domain: &str) -> ServerConfiguration {
+    pub fn new(domain: String, redis_uri: String, loglevel: Option<String>) -> ServerConfiguration {
+        let endpoints = Endpoints {
+            fetch: URL(format!("{domain}/fetch")),
+            list: URL(format!("{domain}/list")),
+            resolve: URL(format!("{domain}/resolve")),
+        };
         ServerConfiguration {
-            domain: URL(String::from(domain)),
-            endpoints: Endpoints {
-                fetch: URL(format!("{domain}/fetch")),
-                list: URL(format!("{domain}/list")),
-                resolve: URL(format!("{domain}/resolve")),
-            },
+            domain: URL(domain),
+            endpoints,
+            redis_uri,
+            loglevel: loglevel.unwrap_or("info".to_string()),
         }
     }
 
-    // Constructs a instance of ServerConfiguration by fetching required values from env vars
+    pub fn from_toml(toml_path: &str) -> Result<Self, Box<dyn StdError>> {
+        let config_string = fs::read_to_string(toml_path)?;
+        let intermediate: ServerConfiguration = toml::from_str(config_string.as_str())?;
+        let endpoints = Endpoints::from_domain(&intermediate.domain);
+        Ok(Self{
+            endpoints,
+            ..intermediate
+        })
+    }
+
+    // Constructs an instance of ServerConfiguration by fetching required values from env vars
     pub fn from_env() -> ServerConfiguration {
         let domain = env::var("TA_DOMAIN").unwrap_or("http://localhost:8080".to_string());
-        ServerConfiguration::new(&domain)
+        let redis = env::var("TA_REDIS").unwrap_or("redis://redis:6379".to_string());
+        let loglevel = env::var("TA_LOGLEVEL").unwrap_or("info".to_string());
+        ServerConfiguration::new(domain, redis, loglevel.into())
     }
 }
 

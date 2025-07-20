@@ -19,7 +19,7 @@ use josekit::{
 };
 use serde_json::{Map, Value, json};
 use std::time::{Duration, SystemTime};
-
+use clap::Parser;
 use inmor::*;
 
 async fn get_from_cache(redis: web::Data<redis::Client>) -> actix_web::Result<impl Responder> {
@@ -71,7 +71,7 @@ async fn index() -> impl Responder {
 
 /// Sets the given entity_id of the application to the redis server.
 /// Thus in future we can return the same entity_id details without creating the JWT again & again.
-fn set_app_entity_data(entity_data: &str, redis: Client) {
+fn set_app_entity_data(entity_data: &str, redis: &Client) {
     let mut conn = redis.get_connection().unwrap();
     let res = redis::Cmd::set("inmor:entity_id", entity_data)
         .query::<String>(&mut conn)
@@ -113,10 +113,24 @@ async fn list_subordinates(redis: web::Data<redis::Client>) -> actix_web::Result
     Ok(HttpResponse::Ok().json(res))
 }
 
+#[derive(Parser, Debug)]
+#[command(version(env!("CARGO_PKG_VERSION")), about(env!("CARGO_PKG_DESCRIPTION")))]
+struct CLI {
+    #[arg(
+        short = 'c',
+        long = "config",
+        value_name = "FILE",
+        help = "Configuration file for the server in .toml format",
+    )]
+    toml_file_path: String,
+}
+
 #[actix_web::main]
 async fn main() -> io::Result<()> {
+    let toml_file_path = CLI::parse().toml_file_path;
+    let server_config = ServerConfiguration::from_toml(&toml_file_path).expect(format!("Failed reading server configuration from {}.", &toml_file_path).as_str());
+
     // Start of new signed entity_id for the application
-    let server_config = ServerConfiguration::from_env();
     let mut federation_entity = Map::new();
     federation_entity.insert("federation_entity".to_string(), server_config.endpoints.to_openid_metadata());
     let entity_data = compile_entityid(&format!("{}/", &server_config.domain), &server_config.domain, json!(federation_entity).into()).unwrap();
@@ -125,11 +139,10 @@ async fn main() -> io::Result<()> {
     // Now the normal web app flow
     //
     //
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
-
-    let redis = redis::Client::open("redis://redis:6379").unwrap();
+    env_logger::init_from_env(env_logger::Env::new().filter(server_config.loglevel));
+    let redis = redis::Client::open(server_config.redis_uri.as_str()).unwrap();
     // Here first we set the new entity_id to redis
-    set_app_entity_data(&entity_data, redis.clone());
+    set_app_entity_data(&entity_data, &redis);
 
     HttpServer::new(move || {
         //
