@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use log::debug;
 use redis::Client;
 use reqwest::blocking;
-use std::fmt::{format, Display};
+use std::fmt::{Display, format};
 
 use actix_web::{
     App, HttpRequest, HttpResponse, HttpServer, Responder, error, get, middleware, post, web,
@@ -125,7 +125,10 @@ impl Endpoints {
         let mut ret = Map::new();
         ret.insert("federation_fetch_endpoint".to_string(), json!(self.fetch));
         ret.insert("federation_list_endpoint".to_string(), json!(self.list));
-        ret.insert("federation_resolve_endpoint".to_string(), json!(self.resolve));
+        ret.insert(
+            "federation_resolve_endpoint".to_string(),
+            json!(self.resolve),
+        );
         json!(ret)
     }
 }
@@ -135,7 +138,6 @@ pub struct ServerConfiguration {
     pub domain: URL,
     pub endpoints: Endpoints,
 }
-
 
 impl ServerConfiguration {
     pub fn new(domain: &str) -> ServerConfiguration {

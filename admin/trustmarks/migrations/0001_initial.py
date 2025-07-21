@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = []
@@ -27,11 +26,7 @@ class Migration(migrations.Migration):
                 ("tmtype", models.CharField()),
             ],
             options={
-                "indexes": [
-                    models.Index(
-                        fields=["tmtype"], name="trustmarks__tmtype_c08ed8_idx"
-                    )
-                ],
+                "indexes": [models.Index(fields=["tmtype"], name="trustmarks__tmtype_c08ed8_idx")],
             },
         ),
         migrations.CreateModel(
@@ -48,9 +43,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "added",
-                    models.DateTimeField(
-                        db_default=django.db.models.functions.datetime.Now()
-                    ),
+                    models.DateTimeField(db_default=django.db.models.functions.datetime.Now()),
                 ),
                 ("domain", models.CharField()),
                 ("active", models.BooleanField(default=False)),
@@ -64,12 +57,8 @@ class Migration(migrations.Migration):
             ],
             options={
                 "indexes": [
-                    models.Index(
-                        fields=["domain"], name="trustmarks__domain_101ea9_idx"
-                    ),
-                    models.Index(
-                        fields=["active"], name="trustmarks__active_292a4b_idx"
-                    ),
+                    models.Index(fields=["domain"], name="trustmarks__domain_101ea9_idx"),
+                    models.Index(fields=["active"], name="trustmarks__active_292a4b_idx"),
                 ],
             },
         ),

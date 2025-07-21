@@ -26,6 +26,7 @@ reportUnknownArgumentType = false
 reportExplicitAny = false
 
 [tool.ruff]
+line-length = 100
 exclude = [
     "db",
     "redis",

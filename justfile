@@ -18,7 +18,15 @@ lint: venv
   # relative to the admin/ directory
   . .venv/bin/activate && \
   ty check . --extra-search-path=admin/ && \
+  ruff format --check && \
   ruff check .
+  cargo clippy
+  cargo fmt --check
+
+# To format the Rust and Python code
+reformat: venv
+  ruff format
+  cargo fmt
 
 # To remove the files of the dev environment
 clean:

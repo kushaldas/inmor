@@ -34,9 +34,7 @@ def addtrustmark(request: HttpRequest) -> HttpResponse:
         form = TrustMarkForm(request.POST)
         # check whether it's valid:
         if form.is_valid():
-            tmr = TrustMarkRequest(
-                entity=form.data["entity"], tmt_select=form.data["tmt_select"]
-            )
+            tmr = TrustMarkRequest(entity=form.data["entity"], tmt_select=form.data["tmt_select"])
             try:
                 trust_mark_type = TrustMarkType.objects.get(id=tmr.tmt_select)
                 t = TrustMark(tmt=trust_mark_type, domain=tmr.entity, active=True)

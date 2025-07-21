@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = []
@@ -25,17 +24,13 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "added",
-                    models.DateTimeField(
-                        db_default=django.db.models.functions.datetime.Now()
-                    ),
+                    models.DateTimeField(db_default=django.db.models.functions.datetime.Now()),
                 ),
                 ("entityid", models.CharField(unique=True)),
             ],
             options={
                 "indexes": [
-                    models.Index(
-                        fields=["entityid"], name="entities_su_entityi_0bfba0_idx"
-                    )
+                    models.Index(fields=["entityid"], name="entities_su_entityi_0bfba0_idx")
                 ],
             },
         ),
