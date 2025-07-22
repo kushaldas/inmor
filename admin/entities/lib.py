@@ -19,11 +19,16 @@ class SubordinateRequest(BaseModel):
     entity: str
 
 
-def add_subordinate(entity_id: str, r: Redis):
+def add_subordinate(entity_id: str, r: Redis) -> str:
     """Adds a new subordinate to the federation.
+
+    This creates a subordinate statement by the TA as iss and adds the metadata of the entity (subordinate).
+    https://openid.net/specs/openid-federation-1_0.html#name-fetch-subordinate-statement-
 
     :args entity_id: The entity_id to be added
     :args r: Redis class from Django
+
+    :returns: String version of the signed JWT
     """
     resp = httpx.get(f"{entity_id}/.well-known/openid-federation")
     text = resp.text
@@ -36,33 +41,40 @@ def add_subordinate(entity_id: str, r: Redis):
 
     # This is the data we care for now
     sub_data = {"iss": settings.TA_DOMAIN}
-    sub_data["jwks"] = payload.get("jwks")
-    sub_data["authority_hints"] = payload.get("authority_hints")
+    # We don't need this for subordinate statement
+    # sub_data["authority_hints"] = payload.get("authority_hints")
     metadata = payload.get("metadata")
     if metadata:
         sub_data["metadata"] = metadata
 
-    # FIXME: Add the TA/I's metadata_policy here.
-    # sub_data["metadata_policy "]= metadata_policy
+    # This is the metadata policy of TA defined in the settings.py
+    sub_data["metadata_policy "] = settings.METADATA_POLICY
 
-    trust_marks = payload.get("trust_marks")
-    if trust_marks:
-        sub_data["trust_marks"] = trust_marks
+    # We don't need trustmarks for the subordinate statements.
+    # trust_marks = payload.get("trust_marks")
+    # if trust_marks:
+    # sub_data["trust_marks"] = trust_marks
+
+    # Default we keep the same expiry of the subordinate entity configuration
     sub_data["exp"] = payload.get("exp")
     sub_data["sub"] = payload.get("sub")
     # creation time
     sub_data["iat"] = datetime.now().timestamp()
+    sub_data["jwks"] = [settings.SIGNING_PUBLIC_KEY]
 
     key = settings.SIGNING_PRIVATE_KEY
 
     # TODO: fix the alg value for other types of keys of TA/I
-    token = jwt.JWT(header={"alg": "RS256", "kid": key.kid}, claims=sub_data)
+    token = jwt.JWT(
+        header={"alg": "RS256", "kid": key.kid, "typ": "entity-statement+jwt"}, claims=sub_data
+    )
     token.make_signed_token(key)
     token_data = token.serialize()
     # Now we should set it in the redis
     _ = r.hset("inmor:subordinates", sub_data["sub"], token_data)
     # Add the entity in the queue for walking the tree (if any)
     _ = r.lpush("inmor:newsubordinate", entity_id)
+    return token_data
 
 
 def self_validate(token: jwt.JWT) -> dict[str, Any]:

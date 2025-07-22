@@ -11,9 +11,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+from typing import List
 
 from jwcrypto import jwk
-from typing import List
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -144,8 +144,12 @@ CACHES = {
 }
 
 SIGNING_PRIVATE_KEY = jwk.JWK.from_json(open("./private.json").read())
+SIGNING_PUBLIC_KEY = jwk.JWK.from_json(open("./public.json").read())
 TA_DOMAIN = "http://localhost:8080"
 TRUSTMARK_PROVIDER = "http://localhost:8080"
+# We must have this, empty dictionary is okay
+METADATA_POLICY = {}
+
 # DATABASES = {
 # "default": {
 # "ENGINE": "django.db.backends.sqlite3",
