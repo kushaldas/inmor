@@ -42,10 +42,12 @@ def add_subordinate_entity(request: HttpRequest) -> HttpResponse:
                 msg = f"Added {subr.entity} as subordinated"
             except IntegrityError:
                 msg = f"{subr.entity} was already added as subordinate."
+            except Exception as e:
+                msg = f"Failed to add {subr.entity} due to {e}"
         else:
-            print("invalid form")
+            print("Falied to validate the form.")
+            msg = "Failed to validate the form."
     else:
-        print("bad form")
         form = EntityForm(request.POST)
 
     return render(
