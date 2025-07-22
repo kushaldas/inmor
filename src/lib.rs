@@ -12,6 +12,7 @@ use actix_web::{
 };
 use actix_web_lab::extract::Query;
 
+use actix_web::http::uri::Parts;
 use base64::Engine;
 use josekit::{
     JoseError,
@@ -26,11 +27,10 @@ use serde::Serialize;
 use serde::{Deserialize, de::Error};
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
-use std::{env, fs, };
 use std::error::Error as StdError;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
-use actix_web::http::uri::Parts;
+use std::{env, fs};
 
 lazy_static! {
     static ref PUBLIEC_KEY: Vec<u8> = std::fs::read("./public.json").unwrap();
@@ -146,7 +146,7 @@ impl Endpoints {
     }
 
     pub fn from_domain(domain: &str) -> Self {
-        Self{
+        Self {
             fetch: URL(format!("{domain}/fetch")),
             list: URL(format!("{domain}/list")),
             resolve: URL(format!("{domain}/resolve")),
@@ -160,7 +160,9 @@ impl Default for Endpoints {
     }
 }
 
-fn default_loglevel() -> String { "info".to_string() }
+fn default_loglevel() -> String {
+    "info".to_string()
+}
 
 #[derive(Debug, Deserialize)]
 pub struct ServerConfiguration {
@@ -193,7 +195,7 @@ impl ServerConfiguration {
         let config_string = fs::read_to_string(toml_path)?;
         let intermediate: ServerConfiguration = toml::from_str(config_string.as_str())?;
         let endpoints = Endpoints::from_domain(&intermediate.domain);
-        Ok(Self{
+        Ok(Self {
             endpoints,
             ..intermediate
         })

@@ -11,6 +11,8 @@ use std::fmt::format;
 use std::ops::Deref;
 use std::{env, io};
 
+use clap::Parser;
+use inmor::*;
 use josekit::{
     JoseError,
     jwk::{Jwk, JwkSet},
@@ -19,8 +21,6 @@ use josekit::{
 };
 use serde_json::{Map, Value, json};
 use std::time::{Duration, SystemTime};
-use clap::Parser;
-use inmor::*;
 
 async fn get_from_cache(redis: web::Data<redis::Client>) -> actix_web::Result<impl Responder> {
     let mut conn = redis
@@ -120,7 +120,7 @@ struct CLI {
         short = 'c',
         long = "config",
         value_name = "FILE",
-        help = "Configuration file for the server in .toml format",
+        help = "Configuration file for the server in .toml format"
     )]
     toml_file_path: String,
 }
@@ -128,7 +128,13 @@ struct CLI {
 #[actix_web::main]
 async fn main() -> io::Result<()> {
     let toml_file_path = CLI::parse().toml_file_path;
-    let server_config = ServerConfiguration::from_toml(&toml_file_path).expect(format!("Failed reading server configuration from {}.", &toml_file_path).as_str());
+    let server_config = ServerConfiguration::from_toml(&toml_file_path).expect(
+        format!(
+            "Failed reading server configuration from {}.",
+            &toml_file_path
+        )
+        .as_str(),
+    );
 
     // Start of new signed entity_id for the application
     let mut federation_entity = Map::new();
