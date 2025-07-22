@@ -19,7 +19,7 @@ class SubordinateRequest(BaseModel):
     entity: str
 
 
-def add_subordinate(entity_id: str, r: Redis):
+def add_subordinate(entity_id: str, r: Redis) -> str:
     """Adds a new subordinate to the federation.
 
     This creates a subordinate statement by the TA as iss and adds the metadata of the entity (subordinate).
@@ -27,6 +27,8 @@ def add_subordinate(entity_id: str, r: Redis):
 
     :args entity_id: The entity_id to be added
     :args r: Redis class from Django
+
+    :returns: String version of the signed JWT
     """
     resp = httpx.get(f"{entity_id}/.well-known/openid-federation")
     text = resp.text
@@ -72,6 +74,7 @@ def add_subordinate(entity_id: str, r: Redis):
     _ = r.hset("inmor:subordinates", sub_data["sub"], token_data)
     # Add the entity in the queue for walking the tree (if any)
     _ = r.lpush("inmor:newsubordinate", entity_id)
+    return token_data
 
 
 def self_validate(token: jwt.JWT) -> dict[str, Any]:
