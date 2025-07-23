@@ -1,0 +1,2 @@
+domain = "http://localhost:8080"
+redis_uri = "redis://redis:6379"

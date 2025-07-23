@@ -6,6 +6,7 @@ services:
     image: docker.sunet.se/inmor:v0.0.1
     volumes:
       - ./target/debug/:/code/
+      - ./taconfig.toml:/code/taconfig.toml
       - ./private.json:/code/private.json
       - ./public.json:/code/public.json
     depends_on:
@@ -13,7 +14,7 @@ services:
         condition: service_healthy
     links:
       - redis
-    command: ./inmor
+    command: ./inmor -c taconfig.toml
     #command: sleep 864000
     ports:
       - "8080:8080"
@@ -58,6 +59,12 @@ services:
         condition: service_healthy
     command: ./docker-entrypoint.sh
     #command: sleep 864000
+    links:
+      - redis
+      - db
+      - ta
+    environment:
+      - INSIDE_CONTAINER=true
     volumes:
       - ./admin/:/code
     ports:
