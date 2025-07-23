@@ -153,7 +153,7 @@ async fn main() -> io::Result<()> {
     // Now the normal web app flow
     //
     //
-    env_logger::init_from_env(env_logger::Env::new().filter(server_config.loglevel));
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     let redis = redis::Client::open(server_config.redis_uri.as_str()).unwrap();
     // Here first we set the new entity_id to redis
     set_app_entity_data(&entity_data, &redis);
