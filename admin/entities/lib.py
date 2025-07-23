@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from datetime import datetime
 from typing import Any, cast
 
@@ -11,6 +12,8 @@ from jwcrypto.jwt import JWT
 from pydantic import BaseModel
 
 from redis import Redis
+
+INSIDE_CONTAINER = os.environ.get("INSIDE_CONTAINER")
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +119,12 @@ def fetch_subordinate_statements(authority_hints: list[str], entity_id: str, r: 
     print(authority_hints)
     print(f"Entity is: {entity_id}")
     for ahint in authority_hints:
+        # HACK: To enable fetching from TA container.
+        # Special code to identify if we running inside of the container
+        # and we have an authority pointing to localhost, then point to ta container
+        if INSIDE_CONTAINER and ahint.find("http://localhost:8080") != -1:
+            ahint = ahint.replace("localhost", "ta")
+            logger.info(f"Replaced to {ahint}")
         # First fetch the entity configuration of the authority & self verify
         try:
             payload, _jwt_net = fetch_payload(ahint)
@@ -131,8 +140,15 @@ def fetch_subordinate_statements(authority_hints: list[str], entity_id: str, r: 
             .get("federation_fetch_endpoint")
         )
         if fetch_endpoint:
+            # HACK: To enable fetching from TA container.
+            # Special code to identify if we running inside of the container
+            # and we have an authority pointing to localhost, then point to ta container
+            if INSIDE_CONTAINER and fetch_endpoint.find("http://localhost:8080") != -1:
+                fetch_endpoint = fetch_endpoint.replace("localhost", "ta")
+                logger.info(f"Replaced to {fetch_endpoint}")
             # We have a fetch endpoint
             url = f"{fetch_endpoint}/?sub={entity_id}"
+            logger.info(f"Fetching subordinate statement: {url}")
             resp = httpx.get(url)
             if resp.status_code != 200:
                 logger.warning(
@@ -173,11 +189,11 @@ def tree_walking(entity_id: str, r: Redis, visited: set[str] | None = None):
     if "openid_relying_party" in metadata:
         # Mweans RP
         _ = r.sadd("inmor:rp", entity_id)
-        pass
+        logger.info(f"{entity_id} added as RP to memory database.")
     elif "openid_provider" in metadata:
         # Means  OP
         _ = r.sadd("inmor:op", entity_id)
-        pass
+        logger.info(f"{entity_id} added as OP to memory database.")
     else:  # means "federation_entity" in metadata:
         # Means we have a TA/IA
         _ = r.sadd("inmor:taia", entity_id)
