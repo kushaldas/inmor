@@ -290,10 +290,13 @@ pub async fn fetch_subordinates(
         .await
         .map_err(error::ErrorInternalServerError)?;
 
-    let res = redis::Cmd::hget("inmor:subordinates", sub)
+    let res = match redis::Cmd::hget("inmor:subordinates", sub)
         .query_async::<String>(&mut conn)
         .await
-        .map_err(error::ErrorInternalServerError)?;
+    {
+        Ok(data) => data,
+        Err(_) => return error_response_404("not_found", "Subordinate not found."),
+    };
 
     Ok(HttpResponse::Ok()
         .content_type("application/entity-statement+jwt")
