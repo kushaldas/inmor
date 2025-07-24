@@ -2,7 +2,7 @@
 use anyhow::{Result, bail};
 
 use lazy_static::lazy_static;
-use log::debug;
+use log::{debug, info};
 use redis::Client;
 use reqwest::blocking;
 use std::fmt::{Display, format};
@@ -18,7 +18,7 @@ use josekit::{
     JoseError,
     jwk::{Jwk, JwkSet},
     jws::alg::rsassa::RsassaJwsAlgorithm,
-    jws::{ES512, JwsAlgorithm, JwsHeader, JwsVerifier, PS256, RS256},
+    jws::{ES256, ES384, ES512, JwsAlgorithm, JwsHeader, JwsVerifier, PS256, RS256},
     jwt::{self, JwtPayload},
     util,
 };
@@ -26,7 +26,7 @@ use oidfed_metadata_policy::*;
 use serde::Serialize;
 use serde::{Deserialize, de::Error};
 use serde_json::{Map, Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error as StdError;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
@@ -414,9 +414,12 @@ pub fn verify_jwt_with_jwks(data: &str, keys: Option<JwkSet>) -> Result<(JwtPayl
     let key = jwks.get(kid)[0];
     // FIXME: We need different verifiers for different kinds of
     // JWK.
+    //println!("ALGO: {:?}", header.algorithm().unwrap());
     let boxed_verifier: Box<dyn JwsVerifier> = match header.algorithm().unwrap() {
         "RS256" => Box::new(RS256.verifier_from_jwk(key).unwrap()),
         "PS256" => Box::new(PS256.verifier_from_jwk(key).unwrap()),
+        "ES256" => Box::new(ES256.verifier_from_jwk(key).unwrap()),
+        "ES384" => Box::new(ES384.verifier_from_jwk(key).unwrap()),
         // FIXME: This has to be fixed for all different keys
         _ => Box::new(ES512.verifier_from_jwk(key).unwrap()),
     };
@@ -432,6 +435,166 @@ pub fn self_verify_jwt(data: &str) -> Result<(JwtPayload, JwsHeader)> {
     let jwks = get_jwks_from_payload(&payload);
     let (payload, header) = verify_jwt_with_jwks(data, Some(jwks))?;
     Ok((payload, header))
+}
+
+/// This function will walk through a subordinate's tree of entities.
+/// Means you point it to a TA/IA and it will traverse the whole tree.
+pub fn tree_walking(
+    entity_id: &str,
+    conn: &mut redis::Connection,
+    visited_in: &HashSet<String>,
+) -> HashSet<String> {
+    // First let us get the entity configuration
+    let jwt_net = match get_jwt_sync(entity_id) {
+        Ok(res) => res,
+        Err(_) => return visited_in.clone(),
+    };
+
+    // Verify and get the payload
+    let (entity_payload, _) = match self_verify_jwt(&jwt_net) {
+        Ok(data) => data,
+        Err(_) => return visited_in.clone(),
+    };
+
+    let mut visited = visited_in.clone();
+
+    // Add to the visisted list
+    visited.insert(entity_id.to_string());
+    // Add to the entity hash in redis
+    match redis::Cmd::hset("inmor:entities", entity_id, jwt_net.as_bytes()).query::<String>(conn) {
+        Ok(_) => (),
+        Err(e) => return visited,
+    }
+
+    // Visit authorities for authority statements
+    match entity_payload.claim("authority_hints") {
+        Some(value) => {
+            // We need to traverse the authorities
+            fetch_all_subordinate_statements(value, entity_id, conn);
+        }
+        None => (),
+    }
+
+    // Now the actual discovery
+    let metadata = match entity_payload.claim("metadata") {
+        Some(value) => value.as_object().unwrap(),
+        None => return visited,
+    };
+
+    if metadata.get("openid_relying_party").is_some() {
+        // Means RP
+        match redis::Cmd::sadd("inmor:rp", entity_id).query::<String>(conn) {
+            Ok(_) => (),
+            Err(e) => return visited,
+        }
+    } else if metadata.get("openid_provider").is_some() {
+        // Means OP
+
+        match redis::Cmd::sadd("inmor:op", entity_id).query::<String>(conn) {
+            Ok(_) => (),
+            Err(e) => return visited,
+        }
+    } else {
+        // Means a TA/IA.
+        match redis::Cmd::sadd("inmor:taia", entity_id).query::<String>(conn) {
+            Ok(_) => (),
+            Err(e) => return visited,
+        }
+        // Getting the list endpoint if any
+        let list_endpoint = match metadata.get("federation_entity") {
+            Some(f_entity) => f_entity.get("federation_list_endpoint"),
+            None => None,
+        };
+
+        if list_endpoint.is_none() {
+            // Means no list endpoint avaiable
+            // TODO: add debug point here
+            return visited;
+        }
+        match get_query_sync(list_endpoint.unwrap().as_str().unwrap()) {
+            Ok(resp) => {
+                // Here we will loop through the subordinates
+                let subs: Value = serde_json::from_str(&resp).unwrap();
+                for sub in subs.as_array().unwrap() {
+                    let sub_str = sub.as_str().unwrap();
+                    if visited.contains(sub_str) {
+                        // Means we already visited it, it is a loop
+                        // We should skip it.
+                        info!("We have a loop: {sub_str}");
+                        continue;
+                    }
+                    // Means we have a new subordinate
+                    info!("Found new subordinate: {sub_str}");
+                    let res = tree_walking(sub_str, conn, &visited);
+                    for entry in res.iter() {
+                        visited.insert(entry.clone());
+                    }
+                }
+            }
+            Err(_) => return visited,
+        }
+    }
+
+    return visited;
+}
+
+/// Fetches the subordinate statements and stores on memory as required.
+pub fn fetch_all_subordinate_statements(
+    authority_hints: &Value,
+    entity_id: &str,
+    conn: &mut redis::Connection,
+) {
+    let ahints = authority_hints.as_array().unwrap();
+    for ahint in ahints.iter() {
+        let ahint_str = ahint.as_str().unwrap();
+        // HACK: Enable TA hack here
+        // TODO: ^^
+        println!("Fetching {ahint_str:?}");
+        let jwt_net = match get_jwt_sync(ahint_str) {
+            Ok(res) => res,
+            Err(_) => return,
+        };
+
+        // Verify and get the payload
+        let (entity_payload, _) = match self_verify_jwt(&jwt_net) {
+            Ok(data) => data,
+            Err(_) => return,
+        };
+
+        let metadata = match entity_payload.claim("metadata") {
+            Some(value) => value.as_object().unwrap(),
+            None => continue,
+        };
+
+        // First get the federation_entity map inside of the JSOn
+        let fed_entity = match metadata.get("federation_entity") {
+            Some(value) => value.as_object().unwrap(),
+            None => continue,
+        };
+        // Then the fetch_end_point
+        let fetch_endpoint = fed_entity.get("federation_fetch_endpoint");
+
+        println!("SEE {fetch_endpoint:?}");
+        if fetch_endpoint.is_some() {
+            // HACK: Enable TA hack here
+            // TODO: ^^
+            let fetch_endpoint = fetch_endpoint.unwrap();
+            let sub_statement =
+                fetch_sub_statement_sync(fetch_endpoint.as_str().unwrap(), entity_id);
+            match sub_statement {
+                Ok((jwt_str, url)) => {
+                    // Store it on memeory
+                    match redis::Cmd::hset("inmor:subordinate_query", url, jwt_str.as_bytes())
+                        .query::<String>(conn)
+                    {
+                        Ok(_) => (),
+                        Err(e) => return,
+                    }
+                }
+                Err(_) => (),
+            }
+        }
+    }
 }
 
 pub async fn resolve_entity_to_trustanchor(
@@ -819,6 +982,31 @@ pub async fn get_entity_configruation_as_jwt(entity_id: &str) -> Result<String> 
     let url = format!("{entity_id}/{WELL_KNOWN}");
     debug!("EC {url}");
     return get_query(&url).await;
+}
+
+/// Gets subordinate statement in sync
+pub fn fetch_sub_statement_sync(fetch_url: &str, entity_id: &str) -> Result<(String, String)> {
+    let url = format!("{fetch_url}?sub={entity_id}");
+    debug!("FETCH {url}");
+    match get_query_sync(&url) {
+        Ok(res) => Ok((res, url)),
+        Err(e) => Err(e),
+    }
+}
+
+/// Gets the enitity configuration of a given entity_id for sync code.
+pub fn get_jwt_sync(entity_id: &str) -> Result<String> {
+    let url = format!("{entity_id}/{WELL_KNOWN}");
+    return get_query_sync(&url);
+}
+
+/// GET call for sync code
+pub fn get_query_sync(url: &str) -> Result<String> {
+    let resp = match ureq::get(url).call() {
+        Ok(mut body) => body.body_mut().read_to_string()?,
+        Err(e) => return Err(anyhow::Error::new(e)),
+    };
+    return Ok(resp);
 }
 
 /// To do a GET query
