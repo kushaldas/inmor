@@ -160,10 +160,6 @@ impl Default for Endpoints {
     }
 }
 
-fn default_loglevel() -> String {
-    "info".to_string()
-}
-
 #[derive(Debug, Deserialize)]
 pub struct ServerConfiguration {
     pub domain: URL,
@@ -171,13 +167,10 @@ pub struct ServerConfiguration {
 
     #[serde(skip)]
     pub endpoints: Endpoints,
-
-    #[serde(default = "default_loglevel")]
-    pub loglevel: String,
 }
 
 impl ServerConfiguration {
-    pub fn new(domain: String, redis_uri: String, loglevel: Option<String>) -> ServerConfiguration {
+    pub fn new(domain: String, redis_uri: String) -> ServerConfiguration {
         let endpoints = Endpoints {
             fetch: URL(format!("{domain}/fetch")),
             list: URL(format!("{domain}/list")),
@@ -187,7 +180,6 @@ impl ServerConfiguration {
             domain: URL(domain),
             endpoints,
             redis_uri,
-            loglevel: loglevel.unwrap_or("info".to_string()),
         }
     }
 
@@ -205,8 +197,7 @@ impl ServerConfiguration {
     pub fn from_env() -> ServerConfiguration {
         let domain = env::var("TA_DOMAIN").unwrap_or("http://localhost:8080".to_string());
         let redis = env::var("TA_REDIS").unwrap_or("redis://redis:6379".to_string());
-        let loglevel = env::var("TA_LOGLEVEL").unwrap_or("info".to_string());
-        ServerConfiguration::new(domain, redis, loglevel.into())
+        ServerConfiguration::new(domain, redis)
     }
 }
 
@@ -290,10 +281,13 @@ pub async fn fetch_subordinates(
         .await
         .map_err(error::ErrorInternalServerError)?;
 
-    let res = redis::Cmd::hget("inmor:subordinates", sub)
+    let res = match redis::Cmd::hget("inmor:subordinates", sub)
         .query_async::<String>(&mut conn)
         .await
-        .map_err(error::ErrorInternalServerError)?;
+    {
+        Ok(data) => data,
+        Err(_) => return error_response_404("not_found", "Subordinate not found."),
+    };
 
     Ok(HttpResponse::Ok()
         .content_type("application/entity-statement+jwt")
