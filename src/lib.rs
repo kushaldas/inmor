@@ -358,13 +358,23 @@ pub async fn fetch_subordinates(
 }
 
 /// Get JWK Set from the given payload
-pub fn get_jwks_from_payload(payload: &JwtPayload) -> JwkSet {
-    let jwks_data = payload.claim("jwks").unwrap();
-    let keys = jwks_data.get("keys").unwrap();
+pub fn get_jwks_from_payload(payload: &JwtPayload) -> Result<JwkSet> {
+    let jwks_data = match payload.claim("jwks") {
+        Some(data) => data,
+        None => return Err(anyhow::Error::msg("No jwks was found in the payload")),
+    };
+    let keys = match jwks_data.get("keys") {
+        Some(data) => data,
+        None => {
+            return Err(anyhow::Error::msg(
+                "No keys was found in jwks in the payload",
+            ));
+        }
+    };
     let mut internal_map: Map<String, Value> = Map::new();
     internal_map.insert("keys".to_string(), keys.clone());
 
-    JwkSet::from_map(internal_map).unwrap()
+    Ok(JwkSet::from_map(internal_map)?)
 }
 
 /// Gets the payload and header without any cryptographic verification.
@@ -406,7 +416,7 @@ pub fn verify_jwt_with_jwks(data: &str, keys: Option<JwkSet>) -> Result<(JwtPayl
     let (payload, header) = get_unverified_payload_header(data); // Now either use the passed one or use self keys
     let jwks = match keys {
         Some(d) => d,
-        None => get_jwks_from_payload(&payload),
+        None => get_jwks_from_payload(&payload)?,
     };
     // FIXME: veify it exits
     let kid = header.key_id().unwrap();
@@ -432,7 +442,7 @@ pub fn verify_jwt_with_jwks(data: &str, keys: Option<JwkSet>) -> Result<(JwtPayl
 /// the payload and header after verification.
 pub fn self_verify_jwt(data: &str) -> Result<(JwtPayload, JwsHeader)> {
     let (payload, header) = get_unverified_payload_header(data);
-    let jwks = get_jwks_from_payload(&payload);
+    let jwks = get_jwks_from_payload(&payload)?;
     let (payload, header) = verify_jwt_with_jwks(data, Some(jwks))?;
     Ok((payload, header))
 }
@@ -692,7 +702,10 @@ pub async fn resolve_entity_to_trustanchor(
                 Err(_) => return result,
             };
         // Get the authority's JWKS and then verify the subordinate statement against them.
-        let ah_jwks = get_jwks_from_payload(&ah_payload);
+        let ah_jwks = match get_jwks_from_payload(&ah_payload) {
+            Ok(result) => result,
+            Err(_) => continue,
+        };
         let (subs_payload, _) = verify_jwt_with_jwks(&sub_statement, Some(ah_jwks)).unwrap();
         // FIXME: In future if the above fails, then we should move to the next authority
         // The above function verify_jwt_with_jwks now has error handling part.
