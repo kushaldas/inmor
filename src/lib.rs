@@ -439,31 +439,28 @@ pub fn self_verify_jwt(data: &str) -> Result<(JwtPayload, JwsHeader)> {
 
 /// This function will walk through a subordinate's tree of entities.
 /// Means you point it to a TA/IA and it will traverse the whole tree.
-pub fn tree_walking(
-    entity_id: &str,
-    conn: &mut redis::Connection,
-    visited_in: &HashSet<String>,
-) -> HashSet<String> {
+pub fn tree_walking(entity_id: &str, conn: &mut redis::Connection) {
     // First let us get the entity configuration
     let jwt_net = match get_jwt_sync(entity_id) {
         Ok(res) => res,
-        Err(_) => return visited_in.clone(),
+        Err(_) => return,
     };
 
     // Verify and get the payload
     let (entity_payload, _) = match self_verify_jwt(&jwt_net) {
         Ok(data) => data,
-        Err(_) => return visited_in.clone(),
+        Err(_) => return,
     };
 
-    let mut visited = visited_in.clone();
-
     // Add to the visisted list
-    visited.insert(entity_id.to_string());
+    match redis::Cmd::sadd("inmor:current_visited", entity_id).query::<String>(conn) {
+        Ok(_) => (),
+        Err(e) => return,
+    }
     // Add to the entity hash in redis
     match redis::Cmd::hset("inmor:entities", entity_id, jwt_net.as_bytes()).query::<String>(conn) {
         Ok(_) => (),
-        Err(e) => return visited,
+        Err(e) => return,
     }
 
     // Visit authorities for authority statements
@@ -478,27 +475,27 @@ pub fn tree_walking(
     // Now the actual discovery
     let metadata = match entity_payload.claim("metadata") {
         Some(value) => value.as_object().unwrap(),
-        None => return visited,
+        None => return,
     };
 
     if metadata.get("openid_relying_party").is_some() {
         // Means RP
         match redis::Cmd::sadd("inmor:rp", entity_id).query::<String>(conn) {
             Ok(_) => (),
-            Err(e) => return visited,
+            Err(e) => return,
         }
     } else if metadata.get("openid_provider").is_some() {
         // Means OP
 
         match redis::Cmd::sadd("inmor:op", entity_id).query::<String>(conn) {
             Ok(_) => (),
-            Err(e) => return visited,
+            Err(e) => return,
         }
     } else {
         // Means a TA/IA.
         match redis::Cmd::sadd("inmor:taia", entity_id).query::<String>(conn) {
             Ok(_) => (),
-            Err(e) => return visited,
+            Err(e) => return,
         }
         // Getting the list endpoint if any
         let list_endpoint = match metadata.get("federation_entity") {
@@ -509,7 +506,7 @@ pub fn tree_walking(
         if list_endpoint.is_none() {
             // Means no list endpoint avaiable
             // TODO: add debug point here
-            return visited;
+            return;
         }
         match get_query_sync(list_endpoint.unwrap().as_str().unwrap()) {
             Ok(resp) => {
@@ -517,7 +514,13 @@ pub fn tree_walking(
                 let subs: Value = serde_json::from_str(&resp).unwrap();
                 for sub in subs.as_array().unwrap() {
                     let sub_str = sub.as_str().unwrap();
-                    if visited.contains(sub_str) {
+                    let ismember = match redis::Cmd::sismember("inmor:current_visited", sub_str)
+                        .query::<bool>(conn)
+                    {
+                        Ok(val) => val,
+                        Err(e) => false,
+                    };
+                    if ismember {
                         // Means we already visited it, it is a loop
                         // We should skip it.
                         info!("We have a loop: {sub_str}");
@@ -525,17 +528,36 @@ pub fn tree_walking(
                     }
                     // Means we have a new subordinate
                     info!("Found new subordinate: {sub_str}");
-                    let res = tree_walking(sub_str, conn, &visited);
-                    for entry in res.iter() {
-                        visited.insert(entry.clone());
-                    }
+                    queue_lpush(sub_str, conn);
                 }
             }
-            Err(_) => return visited,
+            Err(_) => return,
         }
     }
 
-    return visited;
+    return;
+}
+
+// To push to the queue for the next set of visists
+pub fn queue_lpush(entity_id: &str, conn: &mut redis::Connection) {
+    match redis::Cmd::lpush("inmor:visit_subordinate", entity_id).query::<bool>(conn) {
+        Ok(val) => val,
+        Err(e) => false,
+    };
+}
+
+// To blocked wait on the queue
+pub fn queue_wait(conn: &mut redis::Connection) -> String {
+    match redis::Cmd::brpop("inmor:visit_subordinate", 0.0).query::<(String, String)>(conn) {
+        Ok(val) => {
+            println!("Received {val:?} inside.");
+            val.1
+        }
+        Err(e) => {
+            println!("{e:?}");
+            "".to_string()
+        }
+    }
 }
 
 /// Fetches the subordinate statements and stores on memory as required.
