@@ -178,6 +178,7 @@ async fn main() -> io::Result<()> {
             .service(list_subordinates)
             .service(fetch_subordinates)
             .service(resolve_entity)
+            .service(fetch_collections)
             .service(trust_mark_query)
             .service(trust_marked_list)
             .service(trust_mark_status)

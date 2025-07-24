@@ -125,6 +125,7 @@ pub struct Endpoints {
     fetch: URL,
     list: URL,
     resolve: URL,
+    collection: URL,
     // trust_mark_status: URL,
     // trust_mark_list: URL,
     // trust_mark: URL,
@@ -142,6 +143,11 @@ impl Endpoints {
             "federation_resolve_endpoint".to_string(),
             json!(self.resolve),
         );
+
+        ret.insert(
+            "federation_collection_endpoint".to_string(),
+            json!(self.collection),
+        );
         json!(ret)
     }
 
@@ -150,6 +156,7 @@ impl Endpoints {
             fetch: URL(format!("{domain}/fetch")),
             list: URL(format!("{domain}/list")),
             resolve: URL(format!("{domain}/resolve")),
+            collection: URL(format!("{domain}/collection")),
         }
     }
 }
@@ -175,6 +182,7 @@ impl ServerConfiguration {
             fetch: URL(format!("{domain}/fetch")),
             list: URL(format!("{domain}/list")),
             resolve: URL(format!("{domain}/resolve")),
+            collection: URL(format!("{domain}/collection")),
         };
         ServerConfiguration {
             domain: URL(domain),
@@ -257,6 +265,61 @@ pub fn compile_entityid(
     let signer = RS256.signer_from_jwk(&key)?;
     let jwt = jwt::encode_with_signer(&payload, &header, &signer)?;
     Ok(jwt)
+}
+
+///https://zachmann.github.io/openid-federation-entity-collection/main.html
+/// Entity collection endpoint, from Zachmann's draft.
+#[get("/collection")]
+pub async fn fetch_collections(
+    req: HttpRequest,
+    redis: web::Data<redis::Client>,
+) -> actix_web::Result<impl Responder> {
+    let params: Vec<(String, String)> =
+        match web::Query::<Vec<(String, String)>>::from_query(req.query_string()) {
+            Ok(data) => data.to_vec(),
+            Err(_) => return Err(error::ErrorBadRequest("Missing params")),
+        };
+
+    let mut conn = redis
+        .get_connection_manager()
+        .await
+        .map_err(error::ErrorInternalServerError)?;
+
+    println!("{params:?}");
+
+    let mut result: Vec<String> = Vec::new();
+    for (q, p) in params.iter() {
+        println!("{p:?}");
+        if (q == "entity_type") {
+            match p.as_str() {
+                "openid_provider" => {
+                    let mut res = match redis::Cmd::smembers("inmor:op")
+                        .query_async::<Vec<String>>(&mut conn)
+                        .await
+                    {
+                        Ok(data) => data,
+                        Err(_) => vec![],
+                    };
+                    println!("in op");
+                    result.extend_from_slice(&res);
+                }
+                "openid_relying_party" => {
+                    let mut res = match redis::Cmd::smembers("inmor:rp")
+                        .query_async::<Vec<String>>(&mut conn)
+                        .await
+                    {
+                        Ok(data) => data,
+                        Err(_) => vec![],
+                    };
+                    println!("in rp");
+                    result.extend_from_slice(&res);
+                }
+
+                _ => (),
+            }
+        }
+    }
+    Ok(web::Json(result))
 }
 
 /// https://openid.net/specs/openid-federation-1_0.html#name-fetch-subordinate-statement-
