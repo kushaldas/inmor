@@ -73,6 +73,25 @@ pub struct TrustMarkStatusParams {
 
 // QUERY PARAMETERS ENDS
 
+// Response type(s)
+
+/// For https://zachmann.github.io/openid-federation-entity-collection/main.html#section-2.3.2.2
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct EntityCollectionResponse {
+    pub entity_id: String,
+    pub entity_types: Vec<String>,
+}
+
+impl EntityCollectionResponse {
+    pub fn new(entity_id: String, entity_types: Vec<String>) -> Self {
+        EntityCollectionResponse {
+            entity_id,
+            entity_types,
+        }
+    }
+}
+
 /// To store each JWT and verified payload from it
 /// This will be used to return the final result
 #[derive(Debug)]
@@ -287,7 +306,7 @@ pub async fn fetch_collections(
 
     println!("{params:?}");
 
-    let mut result: Vec<String> = Vec::new();
+    let mut result: Vec<EntityCollectionResponse> = Vec::new();
     for (q, p) in params.iter() {
         println!("{p:?}");
         if (q == "entity_type") {
@@ -300,8 +319,17 @@ pub async fn fetch_collections(
                         Ok(data) => data,
                         Err(_) => vec![],
                     };
-                    println!("in op");
-                    result.extend_from_slice(&res);
+                    // Now loop over
+                    for entry in res {
+                        let entry_struct = EntityCollectionResponse::new(
+                            entry,
+                            vec![
+                                "federation_entity".to_string(),
+                                "openid_provider".to_string(),
+                            ],
+                        );
+                        result.push(entry_struct);
+                    }
                 }
                 "openid_relying_party" => {
                     let mut res = match redis::Cmd::smembers("inmor:rp")
@@ -311,15 +339,31 @@ pub async fn fetch_collections(
                         Ok(data) => data,
                         Err(_) => vec![],
                     };
-                    println!("in rp");
-                    result.extend_from_slice(&res);
+                    // Now loop over
+                    for entry in res {
+                        let entry_struct = EntityCollectionResponse::new(
+                            entry,
+                            vec![
+                                "federation_entity".to_string(),
+                                "openid_relying_party".to_string(),
+                            ],
+                        );
+                        result.push(entry_struct);
+                    }
                 }
 
                 _ => (),
             }
+        } else {
+            // We don't support the other query parameters yet.
+            // https://zachmann.github.io/openid-federation-entity-collection/main.html#section-2.2.1 has all
+            // the details.
+            return error_response_400("unsupported_parameter", "{q}");
         }
     }
-    Ok(web::Json(result))
+    Ok(HttpResponse::Ok()
+        .content_type("application/json")
+        .body(json!(result).to_string()))
 }
 
 /// https://openid.net/specs/openid-federation-1_0.html#name-fetch-subordinate-statement-
