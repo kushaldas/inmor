@@ -297,13 +297,10 @@ pub async fn get_entitycollectionresponse(
     let mut result: Vec<EntityCollectionResponse> = Vec::new();
     match entity_type {
         "openid_provider" => {
-            let mut res = match redis::Cmd::smembers("inmor:op")
+            let mut res = (redis::Cmd::smembers("inmor:op")
                 .query_async::<Vec<String>>(&mut conn)
-                .await
-            {
-                Ok(data) => data,
-                Err(_) => vec![],
-            };
+                .await)
+                .unwrap_or_default();
             // Now loop over
             for entry in res {
                 let entry_struct = EntityCollectionResponse::new(
@@ -317,13 +314,10 @@ pub async fn get_entitycollectionresponse(
             }
         }
         "openid_relying_party" => {
-            let mut res = match redis::Cmd::smembers("inmor:rp")
+            let mut res = (redis::Cmd::smembers("inmor:rp")
                 .query_async::<Vec<String>>(&mut conn)
-                .await
-            {
-                Ok(data) => data,
-                Err(_) => vec![],
-            };
+                .await)
+                .unwrap_or_default();
             // Now loop over
             for entry in res {
                 let entry_struct = EntityCollectionResponse::new(
@@ -337,13 +331,10 @@ pub async fn get_entitycollectionresponse(
             }
         }
         "taia" => {
-            let mut res = match redis::Cmd::smembers("inmor:taia")
+            let mut res = (redis::Cmd::smembers("inmor:taia")
                 .query_async::<Vec<String>>(&mut conn)
-                .await
-            {
-                Ok(data) => data,
-                Err(_) => vec![],
-            };
+                .await)
+                .unwrap_or_default();
             // Now loop over
             for entry in res {
                 let entry_struct =
@@ -580,12 +571,9 @@ pub fn tree_walking(entity_id: &str, conn: &mut redis::Connection) {
     }
 
     // Visit authorities for authority statements
-    match entity_payload.claim("authority_hints") {
-        Some(value) => {
-            // We need to traverse the authorities
-            fetch_all_subordinate_statements(value, entity_id, conn);
-        }
-        None => (),
+    if let Some(value) = entity_payload.claim("authority_hints") {
+        // We need to traverse the authorities
+        fetch_all_subordinate_statements(value, entity_id, conn);
     }
 
     // Now the actual discovery
@@ -596,22 +584,19 @@ pub fn tree_walking(entity_id: &str, conn: &mut redis::Connection) {
 
     if metadata.get("openid_relying_party").is_some() {
         // Means RP
-        match redis::Cmd::sadd("inmor:rp", entity_id).query::<String>(conn) {
-            Ok(_) => (),
-            Err(e) => return,
-        }
+        let _ = redis::Cmd::sadd("inmor:rp", entity_id).query::<String>(conn);
     } else if metadata.get("openid_provider").is_some() {
         // Means OP
 
         match redis::Cmd::sadd("inmor:op", entity_id).query::<String>(conn) {
             Ok(_) => (),
-            Err(e) => return,
+            Err(_) => return,
         }
     } else {
         // Means a TA/IA.
         match redis::Cmd::sadd("inmor:taia", entity_id).query::<String>(conn) {
             Ok(_) => (),
-            Err(e) => return,
+            Err(_) => return,
         }
         // Getting the list endpoint if any
         let list_endpoint = match metadata.get("federation_entity") {
@@ -630,12 +615,9 @@ pub fn tree_walking(entity_id: &str, conn: &mut redis::Connection) {
                 let subs: Value = serde_json::from_str(&resp).unwrap();
                 for sub in subs.as_array().unwrap() {
                     let sub_str = sub.as_str().unwrap();
-                    let ismember = match redis::Cmd::sismember("inmor:current_visited", sub_str)
+                    let ismember = redis::Cmd::sismember("inmor:current_visited", sub_str)
                         .query::<bool>(conn)
-                    {
-                        Ok(val) => val,
-                        Err(e) => false,
-                    };
+                        .unwrap_or_default();
                     if ismember {
                         // Means we already visited it, it is a loop
                         // We should skip it.
@@ -650,16 +632,13 @@ pub fn tree_walking(entity_id: &str, conn: &mut redis::Connection) {
             Err(_) => return,
         }
     }
-
-    return;
 }
 
 // To push to the queue for the next set of visists
 pub fn queue_lpush(entity_id: &str, conn: &mut redis::Connection) {
-    match redis::Cmd::lpush("inmor:visit_subordinate", entity_id).query::<bool>(conn) {
-        Ok(val) => val,
-        Err(e) => false,
-    };
+    redis::Cmd::lpush("inmor:visit_subordinate", entity_id)
+        .query::<bool>(conn)
+        .unwrap_or_default();
 }
 
 // To blocked wait on the queue
@@ -719,17 +698,14 @@ pub fn fetch_all_subordinate_statements(
             let fetch_endpoint = fetch_endpoint.unwrap();
             let sub_statement =
                 fetch_sub_statement_sync(fetch_endpoint.as_str().unwrap(), entity_id);
-            match sub_statement {
-                Ok((jwt_str, url)) => {
-                    // Store it on memeory
-                    match redis::Cmd::hset("inmor:subordinate_query", url, jwt_str.as_bytes())
-                        .query::<String>(conn)
-                    {
-                        Ok(_) => (),
-                        Err(e) => return,
-                    }
+            if let Ok((jwt_str, url)) = sub_statement {
+                // Store it on memeory
+                match redis::Cmd::hset("inmor:subordinate_query", url, jwt_str.as_bytes())
+                    .query::<String>(conn)
+                {
+                    Ok(_) => (),
+                    Err(e) => return,
                 }
-                Err(_) => (),
             }
         }
     }
@@ -1138,7 +1114,7 @@ pub fn fetch_sub_statement_sync(fetch_url: &str, entity_id: &str) -> Result<(Str
 /// Gets the enitity configuration of a given entity_id for sync code.
 pub fn get_jwt_sync(entity_id: &str) -> Result<String> {
     let url = format!("{entity_id}/{WELL_KNOWN}");
-    return get_query_sync(&url);
+    get_query_sync(&url)
 }
 
 /// GET call for sync code
@@ -1147,7 +1123,7 @@ pub fn get_query_sync(url: &str) -> Result<String> {
         Ok(mut body) => body.body_mut().read_to_string()?,
         Err(e) => return Err(anyhow::Error::new(e)),
     };
-    return Ok(resp);
+    Ok(resp)
 }
 
 /// To do a GET query
