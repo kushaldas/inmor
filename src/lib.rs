@@ -286,6 +286,76 @@ pub fn compile_entityid(
     Ok(jwt)
 }
 
+/// This method returns the corresponding entitys based on given
+/// entity type. Used in fetch_collection endpoint.
+pub async fn get_entitycollectionresponse(
+    entity_type: &str,
+    redis: web::Data<redis::Client>,
+) -> Result<Vec<EntityCollectionResponse>> {
+    // FIXME: take care of the unwrap here
+    let mut conn = redis.get_connection_manager().await.unwrap();
+    let mut result: Vec<EntityCollectionResponse> = Vec::new();
+    match entity_type {
+        "openid_provider" => {
+            let mut res = match redis::Cmd::smembers("inmor:op")
+                .query_async::<Vec<String>>(&mut conn)
+                .await
+            {
+                Ok(data) => data,
+                Err(_) => vec![],
+            };
+            // Now loop over
+            for entry in res {
+                let entry_struct = EntityCollectionResponse::new(
+                    entry,
+                    vec![
+                        "federation_entity".to_string(),
+                        "openid_provider".to_string(),
+                    ],
+                );
+                result.push(entry_struct);
+            }
+        }
+        "openid_relying_party" => {
+            let mut res = match redis::Cmd::smembers("inmor:rp")
+                .query_async::<Vec<String>>(&mut conn)
+                .await
+            {
+                Ok(data) => data,
+                Err(_) => vec![],
+            };
+            // Now loop over
+            for entry in res {
+                let entry_struct = EntityCollectionResponse::new(
+                    entry,
+                    vec![
+                        "federation_entity".to_string(),
+                        "openid_relying_party".to_string(),
+                    ],
+                );
+                result.push(entry_struct);
+            }
+        }
+        "taia" => {
+            let mut res = match redis::Cmd::smembers("inmor:taia")
+                .query_async::<Vec<String>>(&mut conn)
+                .await
+            {
+                Ok(data) => data,
+                Err(_) => vec![],
+            };
+            // Now loop over
+            for entry in res {
+                let entry_struct =
+                    EntityCollectionResponse::new(entry, vec!["federation_entity".to_string()]);
+                result.push(entry_struct);
+            }
+        }
+        _ => (),
+    }
+    Ok(result)
+}
+
 ///https://zachmann.github.io/openid-federation-entity-collection/main.html
 /// Entity collection endpoint, from Zachmann's draft.
 #[get("/collection")]
@@ -304,52 +374,26 @@ pub async fn fetch_collections(
         .await
         .map_err(error::ErrorInternalServerError)?;
 
-    println!("{params:?}");
+    let mut entity_type_asked = false;
 
     let mut result: Vec<EntityCollectionResponse> = Vec::new();
     for (q, p) in params.iter() {
-        println!("{p:?}");
         if (q == "entity_type") {
+            // Means we were asked an entity type
+            entity_type_asked = true;
             match p.as_str() {
                 "openid_provider" => {
-                    let mut res = match redis::Cmd::smembers("inmor:op")
-                        .query_async::<Vec<String>>(&mut conn)
+                    let internal = get_entitycollectionresponse("openid_provider", redis.clone())
                         .await
-                    {
-                        Ok(data) => data,
-                        Err(_) => vec![],
-                    };
-                    // Now loop over
-                    for entry in res {
-                        let entry_struct = EntityCollectionResponse::new(
-                            entry,
-                            vec![
-                                "federation_entity".to_string(),
-                                "openid_provider".to_string(),
-                            ],
-                        );
-                        result.push(entry_struct);
-                    }
+                        .map_err(error::ErrorInternalServerError)?;
+                    result.extend(internal);
                 }
                 "openid_relying_party" => {
-                    let mut res = match redis::Cmd::smembers("inmor:rp")
-                        .query_async::<Vec<String>>(&mut conn)
-                        .await
-                    {
-                        Ok(data) => data,
-                        Err(_) => vec![],
-                    };
-                    // Now loop over
-                    for entry in res {
-                        let entry_struct = EntityCollectionResponse::new(
-                            entry,
-                            vec![
-                                "federation_entity".to_string(),
-                                "openid_relying_party".to_string(),
-                            ],
-                        );
-                        result.push(entry_struct);
-                    }
+                    let internal =
+                        get_entitycollectionresponse("openid_relying_party", redis.clone())
+                            .await
+                            .map_err(error::ErrorInternalServerError)?;
+                    result.extend(internal);
                 }
 
                 _ => (),
@@ -361,6 +405,24 @@ pub async fn fetch_collections(
             return error_response_400("unsupported_parameter", "{q}");
         }
     }
+
+    // If no entity type was asked, we should return all types.
+    if !entity_type_asked {
+        let internal = get_entitycollectionresponse("openid_provider", redis.clone())
+            .await
+            .map_err(error::ErrorInternalServerError)?;
+        result.extend(internal);
+        let internal = get_entitycollectionresponse("openid_relying_party", redis.clone())
+            .await
+            .map_err(error::ErrorInternalServerError)?;
+        result.extend(internal);
+
+        let internal = get_entitycollectionresponse("taia", redis)
+            .await
+            .map_err(error::ErrorInternalServerError)?;
+        result.extend(internal);
+    }
+
     Ok(HttpResponse::Ok()
         .content_type("application/json")
         .body(json!(result).to_string()))
