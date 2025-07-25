@@ -115,7 +115,7 @@ async fn list_subordinates(redis: web::Data<redis::Client>) -> actix_web::Result
 
 #[derive(Parser, Debug)]
 #[command(version(env!("CARGO_PKG_VERSION")), about(env!("CARGO_PKG_DESCRIPTION")))]
-struct CLI {
+struct Cli {
     #[arg(
         short = 'c',
         long = "config",
@@ -127,14 +127,13 @@ struct CLI {
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
-    let toml_file_path = CLI::parse().toml_file_path;
-    let server_config = ServerConfiguration::from_toml(&toml_file_path).expect(
-        format!(
+    let toml_file_path = Cli::parse().toml_file_path;
+    let server_config = ServerConfiguration::from_toml(&toml_file_path).unwrap_or_else(|_| {
+        panic!(
             "Failed reading server configuration from {}.",
             &toml_file_path
         )
-        .as_str(),
-    );
+    });
 
     // Start of new signed entity_id for the application
     let mut federation_entity = Map::new();

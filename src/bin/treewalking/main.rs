@@ -11,7 +11,7 @@ pub fn thread_code(redis: redis::Client) {
     loop {
         println!("Waiting on thread!");
         let entity_id = queue_wait(&mut conn);
-        if entity_id.len() > 0 {
+        if !entity_id.is_empty() {
             // We have one
             tree_walking(&entity_id, &mut conn);
         }
