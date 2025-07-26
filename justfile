@@ -28,6 +28,8 @@ reformat: venv
   ruff format
   cargo fmt
 
+# Building rust binary to be able to be mounted
+# inside other linux containers.
 build-rs:
   docker run --rm -it \
   -v "$(pwd)":/code \
