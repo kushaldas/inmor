@@ -55,6 +55,8 @@ services:
   admin:
     build: ./admin/
     image: docker.sunet.se/inmor-admin:v0.0.1
+    networks:
+      - inmor-net
     depends_on:
       db:
         condition: service_healthy
@@ -70,7 +72,6 @@ services:
       - ./public.json:/code/public.json
     ports:
       - "8000:8000"
-
 networks:
   inmor-net:
     driver: bridge
