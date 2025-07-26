@@ -48,7 +48,7 @@ down:
 debug-ta:
   docker compose run --rm ta /bin/bash
 
-debug-ta:
+debug-admin:
   docker compose run --rm admin /bin/bash
 
 # To remove the files of the dev environment
