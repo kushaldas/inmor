@@ -28,6 +28,29 @@ reformat: venv
   ruff format
   cargo fmt
 
+build-rs:
+  docker run --rm -it \
+  -v "$(pwd)":/code \
+  -w /code \
+  rust:1.88 \
+  cargo build
+
+build:
+  docker compose build ta
+  docker compose build admin
+
+up:
+  docker compose up -d
+
+down:
+  docker compose down
+
+debug-ta:
+  docker compose run --rm ta /bin/bash
+
+debug-ta:
+  docker compose run --rm admin /bin/bash
+
 # To remove the files of the dev environment
 clean:
   rm -rf .venv
