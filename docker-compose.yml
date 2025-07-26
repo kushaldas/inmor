@@ -4,6 +4,14 @@ services:
     restart: always
     build: .
     image: docker.sunet.se/inmor:v0.0.1
+    networks:
+      - inmor-net
+    healthcheck:
+      test: ['CMD', 'true']
+      interval: 30s
+      timeout: 60s
+      retries: 5
+      start_period: 80s
     volumes:
       - ./target/debug/:/code/
       - ./taconfig.toml:/code/taconfig.toml
@@ -12,60 +20,58 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    links:
-      - redis
     command: ./inmor -c taconfig.toml
-    #command: sleep 864000
     ports:
       - "8080:8080"
   db:
     restart: always
     image: postgres:14-alpine
     shm_size: 1024mb
-    #networks:
-      #- internal_network
+    networks:
+      - inmor-net
     healthcheck:
       test: ['CMD', 'pg_isready', '-U', 'postgres']
       interval: 30s
       timeout: 60s
       retries: 5
-      start_period: 80s 
+      start_period: 80s
     volumes:
       - ./db:/var/lib/postgresql/data
     environment:
       - 'POSTGRES_HOST_AUTH_METHOD=trust'
-
   redis:
     restart: always
     image: redis:7-alpine
-    #networks:
-      #- internal_network
+    networks:
+      - inmor-net
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 30s
       timeout: 60s
       retries: 5
-      start_period: 80s 
+      start_period: 80s
     volumes:
       - ./redis:/data
-
   admin:
     build: ./admin/
     image: docker.sunet.se/inmor-admin:v0.0.1
+    networks:
+      - inmor-net
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ta:
+        condition: service_healthy
     command: ./docker-entrypoint.sh
-    #command: sleep 864000
-    links:
-      - redis
-      - db
-      - ta
     environment:
       - INSIDE_CONTAINER=true
     volumes:
       - ./admin/:/code
+      - ./public.json:/code/public.json
     ports:
       - "8000:8000"
+networks:
+  inmor-net:
+    driver: bridge
