@@ -29,6 +29,7 @@ use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
 use std::error::Error as StdError;
 use std::ops::Deref;
+use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 use std::{env, fs};
 
@@ -42,6 +43,20 @@ pub const WELL_KNOWN: &str = ".well-known/openid-federation";
 pub struct AppState {
     pub entity_id: String,
     pub public_keyset: JwkSet,
+}
+
+// To represent the entities in the federation.
+// FIXME: add all different data as proper part of the structure.
+#[derive(Debug, Clone, Deserialize)]
+pub struct EntityDetails {
+    pub entity_id: String,
+    pub entity_type: String,
+}
+
+// This will be shared about threads via AppData
+#[derive(Debug, Deserialize)]
+pub struct Federation {
+    pub entities: Mutex<HashMap<String, EntityDetails>>,
 }
 
 // SECTION FOR WEB QUERY PARAMETERS
@@ -69,6 +84,16 @@ pub struct TrustMarkListParams {
 #[derive(Debug, Deserialize)]
 pub struct TrustMarkStatusParams {
     trust_mark: String,
+}
+
+/// https://openid.net/specs/openid-federation-1_0.html#section-8.2.1
+/// All parameters are optional here according to the SPEC.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SubListingParams {
+    entity_type: Option<Vec<String>>,
+    trust_marked: Option<bool>,
+    trust_mark_type: Option<String>,
+    intermediate: Option<bool>,
 }
 
 // QUERY PARAMETERS ENDS
@@ -345,6 +370,54 @@ pub async fn get_entitycollectionresponse(
         _ => (),
     }
     Ok(result)
+}
+
+/// TODO: We need to deal with query parameters in future
+/// https://openid.net/specs/openid-federation-1_0.html#section-8.2.1
+#[get("/list")]
+async fn list_subordinates(
+    info: Query<SubListingParams>,
+    data: web::Data<Federation>,
+) -> actix_web::Result<impl Responder> {
+    let SubListingParams {
+        entity_type,
+        trust_marked,
+        trust_mark_type,
+        intermediate,
+    } = info.into_inner();
+
+    println!("{entity_type:?} and {trust_marked:?} and {intermediate:?}");
+
+    // This will contain all subordinates without filtering
+    let mut results: Vec<EntityDetails> = Vec::new();
+    {
+        let fed = data.entities.lock().unwrap();
+        for (key, val) in fed.iter() {
+            results.push(val.clone());
+        }
+    }
+    // Now let us go through the list if we need to filter based on the query parameter.
+    if let Some(etype) = entity_type {
+        // Means an entity_type was passed.
+        results = results
+            .into_iter()
+            .filter(|x| etype.contains(&x.entity_type))
+            .collect();
+    }
+
+    if let Some(inter) = intermediate {
+        // Means we should only provide any intermediate subordinate
+        results = results
+            .into_iter()
+            .filter(|x| match x.entity_type.as_str() {
+                "taia" => inter, // When we asked for intermediate
+                _ => !inter,     // When we want to the rest
+            })
+            .collect();
+    }
+
+    let res: Vec<String> = results.iter().map(|x| x.entity_id.clone()).collect();
+    Ok(HttpResponse::Ok().json(res))
 }
 
 ///https://zachmann.github.io/openid-federation-entity-collection/main.html
