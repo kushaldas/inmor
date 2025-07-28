@@ -41,6 +41,10 @@ build:
   docker compose build ta
   docker compose build admin
 
+rebuild-ta:
+  @cargo build
+  docker compose restart ta
+
 up:
   docker compose up -d
 
