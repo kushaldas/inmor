@@ -51,6 +51,41 @@ pub struct AppState {
 pub struct EntityDetails {
     pub entity_id: String,
     pub entity_type: String,
+    pub has_trustmark: bool,
+    pub trustmarks: HashSet<String>,
+}
+
+impl EntityDetails {
+    pub fn new(entity_id: &str, entity_type: &str, trustmarks: Option<&Value>) -> Self {
+        let mut has_trustmark = false;
+        let mut tms: HashSet<String> = HashSet::new();
+
+        // https://openid.net/specs/openid-federation-1_0.html#section-7.4
+        // Trustmarks is an arrary of objects, with two keys
+        // `trust_mark` and `trust_mark_type`.
+        if let Some(trustms) = trustmarks {
+            // Means we have some trustmarks hopefully
+            if let Some(trustmark_array) = trustms.as_array() {
+                for one_tm in trustmark_array.iter() {
+                    let one_tm_obj = one_tm.as_object().unwrap();
+                    if let Some(tm_type) = one_tm_obj.get("trust_mark_type") {
+                        tms.insert(tm_type.as_str().unwrap().to_owned());
+                    }
+                }
+            }
+        }
+
+        // If we have any trustmarks
+        if !tms.is_empty() {
+            has_trustmark = true;
+        }
+        EntityDetails {
+            entity_id: entity_id.to_string(),
+            entity_type: entity_type.to_string(),
+            has_trustmark: has_trustmark,
+            trustmarks: tms,
+        }
+    }
 }
 
 // This will be shared about threads via AppData
@@ -386,8 +421,6 @@ async fn list_subordinates(
         intermediate,
     } = info.into_inner();
 
-    println!("{entity_type:?} and {trust_marked:?} and {intermediate:?}");
-
     // This will contain all subordinates without filtering
     let mut results: Vec<EntityDetails> = Vec::new();
     {
@@ -414,6 +447,11 @@ async fn list_subordinates(
                 _ => !inter,     // When we want to the rest
             })
             .collect();
+    }
+
+    if let Some(trust_marked) = trust_marked {
+        // Means check if at least one trustmark exists
+        results = results.into_iter().filter(|x| x.has_trustmark).collect();
     }
 
     let res: Vec<String> = results.iter().map(|x| x.entity_id.clone()).collect();

@@ -154,39 +154,32 @@ async fn main() -> io::Result<()> {
     //serde_json::from_str(&file_data).expect("JSON is not well formatted");
 
     let mut con = redis.get_connection().unwrap();
-    let entities: HashMap<String, String> = con.hgetall("inmor:subordinates").unwrap();
+    let entities: HashMap<String, String> = con.hgetall("inmor:subordinates:jwt").unwrap();
     {
         let mut fe = federation.entities.lock().unwrap();
         for (key, val) in entities.iter() {
             // Let us get the metadata
             let (payload, _) = get_unverified_payload_header(val);
             let metadata = payload.claim("metadata").unwrap();
+            let trustmarks = payload.claim("trust_marks");
             let x = metadata.as_object().unwrap();
             if x.contains_key("openid_provider") {
                 // Means OP
-                let entity = EntityDetails {
-                    entity_id: key.clone(),
-                    entity_type: "openid_provider".to_string(),
-                };
+                let entity = EntityDetails::new(&key, "openid_provider", trustmarks);
                 fe.insert(key.clone(), entity);
             } else if x.contains_key("openid_relying_party") {
                 // Means RP
-                let entity = EntityDetails {
-                    entity_id: key.clone(),
-                    entity_type: "openid_relying_party".to_string(),
-                };
+                let entity = EntityDetails::new(&key, "openid_relying_party", trustmarks);
+
                 fe.insert(key.clone(), entity);
             } else {
                 // Means TA/IA
-                let entity = EntityDetails {
-                    entity_id: key.clone(),
-                    entity_type: "taia".to_string(),
-                };
+                let entity = EntityDetails::new(&key, "taia", trustmarks);
                 fe.insert(key.clone(), entity);
             }
         }
     }
-    println!("{federation:?}");
+
     // End of loop for finding all subordinates
     //
     let fed_app_data = web::Data::new(federation);
