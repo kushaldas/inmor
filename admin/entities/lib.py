@@ -90,6 +90,7 @@ def add_subordinate(entity_id: str, r: Redis) -> str:
     token_data = token.serialize()
     # Now we should set it in the redis
     _ = r.hset("inmor:subordinates", sub_data["sub"], token_data)
+    _ = r.hset("inmor:subordinates:jwt", sub_data["sub"], text)
     # Add the entity in the queue for walking the tree (if any)
     _ = r.lpush("inmor:newsubordinate", entity_id)
     return token_data
