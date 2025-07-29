@@ -826,6 +826,7 @@ pub async fn resolve_entity_to_trustanchor(
     sub: &str,
     trust_anchors: Vec<&str>,
     start: bool,
+    visited: &mut HashSet<String>,
 ) -> Vec<VerifiedJWT> {
     eprintln!("\nReceived {sub} with trust anchors {trust_anchors:?}");
 
@@ -836,14 +837,13 @@ pub async fn resolve_entity_to_trustanchor(
     let mut result = Vec::new();
 
     // to stop infinite loop
-    let mut visited: HashMap<String, bool> = HashMap::new();
     // First get the entity configuration and self verify
     let original_ec = match get_entity_configruation_as_jwt(sub).await {
         Ok(res) => res,
         Err(_) => return result,
     };
     // Add it already visited
-    visited.insert(sub.to_string(), true);
+    visited.insert(sub.to_string());
 
     let (opayload, oheader) = self_verify_jwt(&original_ec).unwrap();
 
@@ -865,7 +865,7 @@ pub async fn resolve_entity_to_trustanchor(
         // Get the str from the JSON value
         let ah_entity: &str = ah.as_str().unwrap();
         // If we already visited the authority then continue
-        if visited.contains_key(ah_entity) {
+        if visited.contains(ah_entity) {
             continue;
         }
         // If this is one of the trust anchor, then we are done
@@ -915,6 +915,7 @@ pub async fn resolve_entity_to_trustanchor(
                 ah_entity,
                 trust_anchors.clone(),
                 false,
+                visited,
             ))
             .await;
             if r_result.is_empty() {
@@ -943,6 +944,7 @@ fn create_resolve_response_jwt(
     state: &web::Data<AppState>,
     sub: &str,
     result: &[VerifiedJWT],
+    metadata: Option<Map<String, Value>>,
 ) -> Result<String, JoseError> {
     let mut header = JwsHeader::new();
     header.set_token_type("JWT");
@@ -958,7 +960,7 @@ fn create_resolve_response_jwt(
     // Set expiry after 24 horus
     let exp = SystemTime::now() + Duration::from_secs(86400);
     payload.set_expires_at(&exp);
-
+    payload.set_claim("metadata", Some(json!(metadata)));
     let trust_chain: Vec<String> = result.iter().map(|x| x.jwt.clone()).collect();
     let _ = payload.set_claim("trust_chain", Some(json!(trust_chain)));
 
@@ -981,8 +983,9 @@ pub async fn resolve_entity(
     let mut found_ta = false;
     let ResolveParams { sub, trust_anchors } = info.into_inner();
     let tas: Vec<&str> = trust_anchors.iter().map(|s| s as &str).collect();
+    let mut visisted: HashSet<String> = HashSet::new();
     // Now loop over the trust_anchors
-    let result = resolve_entity_to_trustanchor(&sub, tas, true).await;
+    let result = resolve_entity_to_trustanchor(&sub, tas, true, &mut visisted).await;
 
     // Verify that the result is not empty and we actually found a TA
     if result.is_empty() {
@@ -1002,7 +1005,7 @@ pub async fn resolve_entity(
         println!("\n{:?}\n", res.payload);
         mpolicy = match mpolicy {
             // This is when we have some policy the higher subordinate statement
-            Some(val) => {
+            Some(mut val) => {
                 // But we should only apply claim from subordinate statements
                 if res.substatement {
                     let new_policy = res.payload.claim("metadata_policy");
@@ -1027,8 +1030,12 @@ pub async fn resolve_entity(
                 } else {
                     // Means the final entity statement
                     // We should now apply the merged policy at val to the metadata claim
+                    let mut meta_keys: HashSet<String> = HashSet::new();
                     let metadata = res.payload.claim("metadata").unwrap().as_object().unwrap();
-                    eprintln!("\nFinal policy: {:?}\n\n{:?}\n\n", &val, metadata);
+                    eprintln!(
+                        "\nFinal policy checking: val= {:?}\n\n metadata= {:?}\n\n",
+                        &val, metadata
+                    );
                     // If the particular key of metadata exists in policy, then only we apply the
                     // policy on the metata
                     for (mkey, mvalue) in metadata.iter() {
@@ -1039,14 +1046,46 @@ pub async fn resolve_entity(
                             let mpolicy = val.get(mkey).unwrap().as_object().unwrap();
                             let result =
                                 resolve_metadata_policy(mpolicy, mvalue.as_object().unwrap());
-                            if result.is_err() {
-                                return error_response_400(
-                                    "invalid_trust_chain",
-                                    "received error in applying metadata policy on metadata",
-                                );
+                            // Now we have the result for one particular metadata
+                            // If it is Okay, then we should put the resolved metadata to the val
+                            //
+                            match result {
+                                Ok(v) => {
+                                    let temp = v.as_object().unwrap().get(mkey).unwrap();
+                                    val.insert(mkey.clone(), temp.clone());
+                                    // Now keep a note that we have used this key
+                                    meta_keys.insert(mkey.clone());
+                                }
+                                Err(_) => {
+                                    return error_response_400(
+                                        "invalid_trust_chain",
+                                        "received error in applying metadata policy on metadata",
+                                    );
+                                }
                             }
+                        } else {
+                            // Here the policy object does not have the key of the metadata, means
+                            // we directly copy it over.
+                            meta_keys.insert(mkey.clone());
+                            val.insert(mkey.clone(), mvalue.clone());
                         }
                     }
+
+                    // Now remove any extra key/value pair from the final resolved metadata.
+                    // These extra key/values were part of policy but does not matter for this
+                    // metadata.
+                    let mut to_remove = Vec::new();
+                    for (key, _) in val.iter() {
+                        if !meta_keys.contains(key) {
+                            // Then remove it
+                            to_remove.push(key.clone());
+                        }
+                    }
+                    // Now all extra key/value
+                    for key in to_remove.iter() {
+                        val.remove(key);
+                    }
+                    //
                     println!("Succesfully applied metadata policy on metadata");
                     println!("{:?}\n", &val);
 
@@ -1068,22 +1107,32 @@ pub async fn resolve_entity(
                         }
 
                         // Even the subordinate statement does not have any policy
-                        None => None,
+                        None => Some(Map::new()),
                     }
                 } else {
                     // Not a subordinate statement
                     // Means an entity statement
                     // Means no policy and only statement, nothing to verify against
-                    None
+                    // Return the original metadata here
+                    //None
+                    //Some(Map::new())
+                    Some(
+                        res.payload
+                            .claim("metadata")
+                            .unwrap()
+                            .as_object()
+                            .unwrap()
+                            .clone(),
+                    )
                 }
             }
         };
-        // HACK:
-        //println!("\n{:?}\n", res.payload)
     }
+    // HACK:
+    println!("After the whole call: {mpolicy:?}\n");
     // If we reach here means we have a list of JWTs and also verified metadata.
     // TODO: deal with the signing error here.
-    let resp = create_resolve_response_jwt(&state, &sub, &result).unwrap();
+    let resp = create_resolve_response_jwt(&state, &sub, &result, mpolicy).unwrap();
     Ok(HttpResponse::Ok()
         .insert_header(("content-type", "application/resolve-response+jwt"))
         .body(resp))
