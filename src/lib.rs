@@ -82,7 +82,7 @@ impl EntityDetails {
         EntityDetails {
             entity_id: entity_id.to_string(),
             entity_type: entity_type.to_string(),
-            has_trustmark: has_trustmark,
+            has_trustmark,
             trustmarks: tms,
         }
     }
@@ -432,26 +432,20 @@ async fn list_subordinates(
     // Now let us go through the list if we need to filter based on the query parameter.
     if let Some(etype) = entity_type {
         // Means an entity_type was passed.
-        results = results
-            .into_iter()
-            .filter(|x| etype.contains(&x.entity_type))
-            .collect();
+        results.retain(|x| etype.contains(&x.entity_type));
     }
 
     if let Some(inter) = intermediate {
         // Means we should only provide any intermediate subordinate
-        results = results
-            .into_iter()
-            .filter(|x| match x.entity_type.as_str() {
+        results.retain(|x| match x.entity_type.as_str() {
                 "taia" => inter, // When we asked for intermediate
                 _ => !inter,     // When we want to the rest
-            })
-            .collect();
+            });
     }
 
     if let Some(trust_marked) = trust_marked {
         // Means check if at least one trustmark exists
-        results = results.into_iter().filter(|x| x.has_trustmark).collect();
+        results.retain(|x| x.has_trustmark);
     }
 
     let res: Vec<String> = results.iter().map(|x| x.entity_id.clone()).collect();

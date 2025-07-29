@@ -165,16 +165,16 @@ async fn main() -> io::Result<()> {
             let x = metadata.as_object().unwrap();
             if x.contains_key("openid_provider") {
                 // Means OP
-                let entity = EntityDetails::new(&key, "openid_provider", trustmarks);
+                let entity = EntityDetails::new(key, "openid_provider", trustmarks);
                 fe.insert(key.clone(), entity);
             } else if x.contains_key("openid_relying_party") {
                 // Means RP
-                let entity = EntityDetails::new(&key, "openid_relying_party", trustmarks);
+                let entity = EntityDetails::new(key, "openid_relying_party", trustmarks);
 
                 fe.insert(key.clone(), entity);
             } else {
                 // Means TA/IA
-                let entity = EntityDetails::new(&key, "taia", trustmarks);
+                let entity = EntityDetails::new(key, "taia", trustmarks);
                 fe.insert(key.clone(), entity);
             }
         }
