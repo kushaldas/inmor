@@ -827,7 +827,7 @@ pub async fn resolve_entity_to_trustanchor(
     trust_anchors: Vec<&str>,
     start: bool,
     visited: &mut HashSet<String>,
-) -> Vec<VerifiedJWT> {
+) -> Result<Vec<VerifiedJWT>> {
     eprintln!("\nReceived {sub} with trust anchors {trust_anchors:?}");
 
     let empty_authority: Vec<String> = Vec::new();
@@ -840,12 +840,13 @@ pub async fn resolve_entity_to_trustanchor(
     // First get the entity configuration and self verify
     let original_ec = match get_entity_configruation_as_jwt(sub).await {
         Ok(res) => res,
-        Err(_) => return result,
+        Err(_) => return Ok(result), // Read FOUND_TA section in code to find why it is okay to
+                                     // result a half done list back.
     };
     // Add it already visited
     visited.insert(sub.to_string());
 
-    let (opayload, oheader) = self_verify_jwt(&original_ec).unwrap();
+    let (opayload, oheader) = self_verify_jwt(&original_ec)?;
 
     if start {
         let vjwt = VerifiedJWT::new(original_ec, &opayload, false, false);
@@ -876,7 +877,8 @@ pub async fn resolve_entity_to_trustanchor(
         // Fetch the authority's entity configuration
         let ah_jwt = match get_entity_configruation_as_jwt(ah_entity).await {
             Ok(res) => res,
-            Err(_) => return result,
+            Err(_) => return Ok(result), // Read FOUND_TA section in code to find why it is okay to
+                                         // result a half done list back.
         };
 
         // Verify and get the payload
@@ -892,15 +894,18 @@ pub async fn resolve_entity_to_trustanchor(
         let sub_statement =
             match fetch_subordinate_statement(fetch_endpoint.as_str().unwrap(), sub).await {
                 Ok(res) => res,
-                Err(_) => return result,
+                Err(_) => return Ok(result), // Read FOUND_TA section in code to find why it is okay to
+                                             // result a half done list back.
             };
         // Get the authority's JWKS and then verify the subordinate statement against them.
         let ah_jwks = match get_jwks_from_payload(&ah_payload) {
             Ok(result) => result,
             Err(_) => continue,
         };
-        let (subs_payload, _) = verify_jwt_with_jwks(&sub_statement, Some(ah_jwks)).unwrap();
-        // FIXME: In future if the above fails, then we should move to the next authority
+        let (subs_payload, _) = match verify_jwt_with_jwks(&sub_statement, Some(ah_jwks)) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
         // The above function verify_jwt_with_jwks now has error handling part.
         if ta_flag {
             // Means this is the end of resolving
@@ -908,7 +913,7 @@ pub async fn resolve_entity_to_trustanchor(
             result.push(vjwt);
             let ajwt = VerifiedJWT::new(ah_jwt.clone(), &ah_payload, false, true);
             result.push(ajwt);
-            return result;
+            return Ok(result);
         } else {
             // Now do a recursive query
             let r_result = Box::pin(resolve_entity_to_trustanchor(
@@ -917,7 +922,7 @@ pub async fn resolve_entity_to_trustanchor(
                 false,
                 visited,
             ))
-            .await;
+            .await?;
             if r_result.is_empty() {
                 continue;
             } else {
@@ -925,18 +930,10 @@ pub async fn resolve_entity_to_trustanchor(
                 result.push(vjwt);
                 result.extend(r_result);
             }
-            //result.extend(
-            //Box::pin(resolve_entity_to_trustanchor(
-            //ah_entity,
-            //trust_anchors,
-            //false,
-            //))
-            //.await,
-            //);
-            return result;
+            return Ok(result);
         }
     }
-    vec![]
+    Ok(vec![])
 }
 
 /// To create the signed JWT for resolve response
@@ -985,7 +982,12 @@ pub async fn resolve_entity(
     let tas: Vec<&str> = trust_anchors.iter().map(|s| s as &str).collect();
     let mut visisted: HashSet<String> = HashSet::new();
     // Now loop over the trust_anchors
-    let result = resolve_entity_to_trustanchor(&sub, tas, true, &mut visisted).await;
+    let result = match resolve_entity_to_trustanchor(&sub, tas, true, &mut visisted).await {
+        Ok(res) => res,
+        Err(_) => {
+            return error_response_400("invalid_trust_chain", "Failed to find trust chain");
+        }
+    };
 
     // Verify that the result is not empty and we actually found a TA
     if result.is_empty() {
@@ -993,6 +995,7 @@ pub async fn resolve_entity(
     }
     if result.iter().any(|i| i.taresult) {
         // Means we found our trust anchor
+        // FOUND_TA: Here if verify if we actually found any of the TA we wanted.
         found_ta = true;
     }
     if !found_ta {
