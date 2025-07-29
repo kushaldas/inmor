@@ -5,10 +5,13 @@ use actix_web::{
 };
 use lazy_static::lazy_static;
 use redis::Client;
+use redis::Commands;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt::format;
+use std::fs;
 use std::ops::Deref;
+use std::sync::Mutex;
 use std::{env, io};
 
 use clap::Parser;
@@ -20,6 +23,7 @@ use josekit::{
     jwt::{self, JwtPayload},
 };
 use serde_json::{Map, Value, json};
+use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
 async fn get_from_cache(redis: web::Data<redis::Client>) -> actix_web::Result<impl Responder> {
@@ -96,23 +100,6 @@ async fn openid_federation(redis: web::Data<redis::Client>) -> actix_web::Result
         .body(res))
 }
 
-/// TODO: We need to deal with query parameters in future
-/// https://openid.net/specs/openid-federation-1_0.html#name-subordinate-listing-request
-#[get("/list")]
-async fn list_subordinates(redis: web::Data<redis::Client>) -> actix_web::Result<impl Responder> {
-    let mut conn = redis
-        .get_connection_manager()
-        .await
-        .map_err(error::ErrorInternalServerError)?;
-
-    let res = redis::Cmd::hkeys("inmor:subordinates")
-        .query_async::<Vec<String>>(&mut conn)
-        .await
-        .map_err(error::ErrorInternalServerError)?;
-
-    Ok(HttpResponse::Ok().json(res))
-}
-
 #[derive(Parser, Debug)]
 #[command(version(env!("CARGO_PKG_VERSION")), about(env!("CARGO_PKG_DESCRIPTION")))]
 struct Cli {
@@ -157,6 +144,46 @@ async fn main() -> io::Result<()> {
     // Here first we set the new entity_id to redis
     set_app_entity_data(&entity_data, &redis);
 
+    let mut federation = Federation {
+        entities: Mutex::new(HashMap::new()),
+    };
+
+    // Now we will go through all the subordinates from admin application
+    //let file_data = fs::read_to_string("subordinates.json").expect("Cound not read.");
+    //let new_skolor: Federation =
+    //serde_json::from_str(&file_data).expect("JSON is not well formatted");
+
+    let mut con = redis.get_connection().unwrap();
+    let entities: HashMap<String, String> = con.hgetall("inmor:subordinates:jwt").unwrap();
+    {
+        let mut fe = federation.entities.lock().unwrap();
+        for (key, val) in entities.iter() {
+            // Let us get the metadata
+            let (payload, _) = get_unverified_payload_header(val);
+            let metadata = payload.claim("metadata").unwrap();
+            let trustmarks = payload.claim("trust_marks");
+            let x = metadata.as_object().unwrap();
+            if x.contains_key("openid_provider") {
+                // Means OP
+                let entity = EntityDetails::new(&key, "openid_provider", trustmarks);
+                fe.insert(key.clone(), entity);
+            } else if x.contains_key("openid_relying_party") {
+                // Means RP
+                let entity = EntityDetails::new(&key, "openid_relying_party", trustmarks);
+
+                fe.insert(key.clone(), entity);
+            } else {
+                // Means TA/IA
+                let entity = EntityDetails::new(&key, "taia", trustmarks);
+                fe.insert(key.clone(), entity);
+            }
+        }
+    }
+
+    // End of loop for finding all subordinates
+    //
+    let fed_app_data = web::Data::new(federation);
+
     HttpServer::new(move || {
         //
         let jwks = get_ta_jwks_public_keyset();
@@ -167,6 +194,7 @@ async fn main() -> io::Result<()> {
                 public_keyset: jwks,
             }))
             .app_data(web::Data::new(redis.clone()))
+            .app_data(fed_app_data.clone())
             .service(
                 web::resource("/stuff")
                     .route(web::get().to(get_from_cache))

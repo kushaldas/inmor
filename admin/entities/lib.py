@@ -48,6 +48,21 @@ def add_subordinate(entity_id: str, r: Redis) -> str:
     # sub_data["authority_hints"] = payload.get("authority_hints")
     metadata = payload.get("metadata")
     if metadata:
+        # We should mark what kind of entity it is, for the /list endpoint
+        # The treewalking code will visit the entity later, but this is to make sure
+        # that we have some information storied at the first check.
+        if "openid_relying_party" in metadata:
+            # Mweans RP
+            _ = r.sadd("inmor:rp", entity_id)
+            logger.info(f"{entity_id} added as RP to memory database.")
+        elif "openid_provider" in metadata:
+            # Means  OP
+            _ = r.sadd("inmor:op", entity_id)
+            logger.info(f"{entity_id} added as OP to memory database.")
+        else:  # means "federation_entity" in metadata:
+            # Means we have a TA/IA
+            _ = r.sadd("inmor:taia", entity_id)
+
         sub_data["metadata"] = metadata
 
     # This is the metadata policy of TA defined in the settings.py
@@ -75,6 +90,7 @@ def add_subordinate(entity_id: str, r: Redis) -> str:
     token_data = token.serialize()
     # Now we should set it in the redis
     _ = r.hset("inmor:subordinates", sub_data["sub"], token_data)
+    _ = r.hset("inmor:subordinates:jwt", sub_data["sub"], text)
     # Add the entity in the queue for walking the tree (if any)
     _ = r.lpush("inmor:newsubordinate", entity_id)
     return token_data

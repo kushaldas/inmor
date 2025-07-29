@@ -29,6 +29,7 @@ use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
 use std::error::Error as StdError;
 use std::ops::Deref;
+use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 use std::{env, fs};
 
@@ -42,6 +43,55 @@ pub const WELL_KNOWN: &str = ".well-known/openid-federation";
 pub struct AppState {
     pub entity_id: String,
     pub public_keyset: JwkSet,
+}
+
+// To represent the entities in the federation.
+// FIXME: add all different data as proper part of the structure.
+#[derive(Debug, Clone, Deserialize)]
+pub struct EntityDetails {
+    pub entity_id: String,
+    pub entity_type: String,
+    pub has_trustmark: bool,
+    pub trustmarks: HashSet<String>,
+}
+
+impl EntityDetails {
+    pub fn new(entity_id: &str, entity_type: &str, trustmarks: Option<&Value>) -> Self {
+        let mut has_trustmark = false;
+        let mut tms: HashSet<String> = HashSet::new();
+
+        // https://openid.net/specs/openid-federation-1_0.html#section-7.4
+        // Trustmarks is an arrary of objects, with two keys
+        // `trust_mark` and `trust_mark_type`.
+        if let Some(trustms) = trustmarks {
+            // Means we have some trustmarks hopefully
+            if let Some(trustmark_array) = trustms.as_array() {
+                for one_tm in trustmark_array.iter() {
+                    let one_tm_obj = one_tm.as_object().unwrap();
+                    if let Some(tm_type) = one_tm_obj.get("trust_mark_type") {
+                        tms.insert(tm_type.as_str().unwrap().to_owned());
+                    }
+                }
+            }
+        }
+
+        // If we have any trustmarks
+        if !tms.is_empty() {
+            has_trustmark = true;
+        }
+        EntityDetails {
+            entity_id: entity_id.to_string(),
+            entity_type: entity_type.to_string(),
+            has_trustmark: has_trustmark,
+            trustmarks: tms,
+        }
+    }
+}
+
+// This will be shared about threads via AppData
+#[derive(Debug, Deserialize)]
+pub struct Federation {
+    pub entities: Mutex<HashMap<String, EntityDetails>>,
 }
 
 // SECTION FOR WEB QUERY PARAMETERS
@@ -69,6 +119,16 @@ pub struct TrustMarkListParams {
 #[derive(Debug, Deserialize)]
 pub struct TrustMarkStatusParams {
     trust_mark: String,
+}
+
+/// https://openid.net/specs/openid-federation-1_0.html#section-8.2.1
+/// All parameters are optional here according to the SPEC.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SubListingParams {
+    entity_type: Option<Vec<String>>,
+    trust_marked: Option<bool>,
+    trust_mark_type: Option<String>,
+    intermediate: Option<bool>,
 }
 
 // QUERY PARAMETERS ENDS
@@ -345,6 +405,57 @@ pub async fn get_entitycollectionresponse(
         _ => (),
     }
     Ok(result)
+}
+
+/// TODO: We need to deal with query parameters in future
+/// https://openid.net/specs/openid-federation-1_0.html#section-8.2.1
+#[get("/list")]
+async fn list_subordinates(
+    info: Query<SubListingParams>,
+    data: web::Data<Federation>,
+) -> actix_web::Result<impl Responder> {
+    let SubListingParams {
+        entity_type,
+        trust_marked,
+        trust_mark_type,
+        intermediate,
+    } = info.into_inner();
+
+    // This will contain all subordinates without filtering
+    let mut results: Vec<EntityDetails> = Vec::new();
+    {
+        let fed = data.entities.lock().unwrap();
+        for (key, val) in fed.iter() {
+            results.push(val.clone());
+        }
+    }
+    // Now let us go through the list if we need to filter based on the query parameter.
+    if let Some(etype) = entity_type {
+        // Means an entity_type was passed.
+        results = results
+            .into_iter()
+            .filter(|x| etype.contains(&x.entity_type))
+            .collect();
+    }
+
+    if let Some(inter) = intermediate {
+        // Means we should only provide any intermediate subordinate
+        results = results
+            .into_iter()
+            .filter(|x| match x.entity_type.as_str() {
+                "taia" => inter, // When we asked for intermediate
+                _ => !inter,     // When we want to the rest
+            })
+            .collect();
+    }
+
+    if let Some(trust_marked) = trust_marked {
+        // Means check if at least one trustmark exists
+        results = results.into_iter().filter(|x| x.has_trustmark).collect();
+    }
+
+    let res: Vec<String> = results.iter().map(|x| x.entity_id.clone()).collect();
+    Ok(HttpResponse::Ok().json(res))
 }
 
 ///https://zachmann.github.io/openid-federation-entity-collection/main.html
