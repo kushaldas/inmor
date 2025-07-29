@@ -438,9 +438,9 @@ async fn list_subordinates(
     if let Some(inter) = intermediate {
         // Means we should only provide any intermediate subordinate
         results.retain(|x| match x.entity_type.as_str() {
-                "taia" => inter, // When we asked for intermediate
-                _ => !inter,     // When we want to the rest
-            });
+            "taia" => inter, // When we asked for intermediate
+            _ => !inter,     // When we want to the rest
+        });
     }
 
     if let Some(trust_marked) = trust_marked {
