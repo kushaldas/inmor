@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-md m-5">
+
+    <h2>Add new Trust mark type</h2>
+    <div class="mb-3">
+    <form method="post">
+      {% csrf_token %}
+      <div class="mb-3">
+        <input type="text" class="form-control" name="type" id="id_type">
+      </div>
+      <button type="submit" class="btn btn-primary">Submit</button>
+    </form>
+    </div>
+
+    <div class="mb-3">
+      {{ msg }}
+    </div>
+
+
+</div>
+{% endblock %}

@@ -76,6 +76,22 @@
                             </li>
                             <li>
 
+                                <a href="{% url 'trustmarks:type_index' %}" class="nav-link px-0"> <span
+                                        class="d-none d-sm-inline text-white">Trustmark types</span>
+                                </a>
+                                <ul class="collapse show nav flex-column ms-1" id="submenu1" data-bs-parent="#menu">
+                                    <li class="w-100">
+                                        <a href="{% url 'trustmarks:add_type' %}"  class="nav-link px-0"> <span
+                                                class="d-none d-sm-inline text-white">Add Trustmark type</span>
+                                        </a>
+                                        <a href="{% url 'trustmarks:list_types' %}"  class="nav-link px-0"> <span
+                                                class="d-none d-sm-inline text-white">List Trustmark types</span>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                            <li>
+
                                 <a href="{% url 'entities:index' %}" class="nav-link px-0"> <span
                                         class="d-none d-sm-inline text-white">Subordinates</span>
                                 </a>
