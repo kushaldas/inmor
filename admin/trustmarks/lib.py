@@ -12,6 +12,10 @@ class TrustMarkRequest(BaseModel):
     tmt_select: str
 
 
+class TrustMarkTypeRequest(BaseModel):
+    type: str
+
+
 def add_trustmark(entity: str, trustmarktype: str, r: redis.Redis) -> str:
     """Adds a new subordinate to the federation.
 
