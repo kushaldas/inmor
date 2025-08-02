@@ -141,6 +141,7 @@ pub struct SubListingParams {
 pub struct EntityCollectionResponse {
     pub entity_id: String,
     pub entity_types: Vec<String>,
+    // FIXME: Add missing ui_infos details
 }
 
 impl EntityCollectionResponse {
