@@ -138,9 +138,19 @@ pub struct SubListingParams {
 /// For https://zachmann.github.io/openid-federation-entity-collection/main.html#section-2.3.2.2
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct UiInfo {
+    display_name: Option<String>,
+    description: Option<String>,
+    logo_uri: Option<String>,
+    policy_uri: Option<String>,
+    information_uri: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct EntityCollectionResponse {
     pub entity_id: String,
     pub entity_types: Vec<String>,
+    pub ui_infos: Option<HashMap<String, UiInfo>>,
 }
 
 impl EntityCollectionResponse {
@@ -148,6 +158,7 @@ impl EntityCollectionResponse {
         EntityCollectionResponse {
             entity_id,
             entity_types,
+            ui_infos: None,
         }
     }
 }
