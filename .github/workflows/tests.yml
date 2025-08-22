@@ -26,7 +26,10 @@ jobs:
 
       - name: actions-setup-redis
         uses: shogo82148/actions-setup-redis@v1.42.0
-        auto-start: false
+        with:
+          auto-start: false
+          distribution: "valkey"
+          redis-version: "7.2"
 
       - name: Install just
         uses: extractions/setup-just@v3
