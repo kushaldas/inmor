@@ -110,11 +110,15 @@ struct Cli {
         help = "Configuration file for the server in .toml format"
     )]
     toml_file_path: String,
+    #[arg(short, long, default_value_t = 8080, help = "Port to run the server")]
+    port: u16,
 }
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
-    let toml_file_path = Cli::parse().toml_file_path;
+    let args = Cli::parse();
+    let port = args.port;
+    let toml_file_path = args.toml_file_path;
     let server_config = ServerConfiguration::from_toml(&toml_file_path).unwrap_or_else(|_| {
         panic!(
             "Failed reading server configuration from {}.",
@@ -213,7 +217,7 @@ async fn main() -> io::Result<()> {
             .wrap(middleware::Logger::default())
     })
     .workers(2)
-    .bind(("0.0.0.0", 8080))?
+    .bind(("0.0.0.0", port))?
     .run()
     .await
 }

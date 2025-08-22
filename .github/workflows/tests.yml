@@ -24,5 +24,18 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@d9e0f98d3fc6adb07d1e3d37f3043649ddad06a1 # v6.5.0
 
+      - name: actions-setup-redis
+        uses: shogo82148/actions-setup-redis@v1.42.0
+        with:
+          auto-start: false
+          distribution: "valkey"
+          redis-version: "7.2"
+
+      - name: Install just
+        uses: extractions/setup-just@v3
+
       - name: Build TA appliation
         run: cargo build
+
+      - name: Run tests for inmor
+        run: just test

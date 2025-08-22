@@ -16,3 +16,6 @@ httpx
 django-click
 pydantic
 ty
+port-for
+pytest-redis
+pytest

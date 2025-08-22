@@ -180,3 +180,5 @@ cython_debug/
 # project specific
 redis/
 db/
+*.rdb
+*.log
