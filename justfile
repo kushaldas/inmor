@@ -23,6 +23,12 @@ lint: venv
   cargo clippy
   cargo fmt --check
 
+# To run inmor tests
+test: venv
+  # We have integration tests for the inmor rust binary
+  . .venv/bin/activate && \
+  pytest -vvv
+
 # To format the Rust and Python code
 reformat: venv
   ruff format
