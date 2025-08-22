@@ -27,7 +27,7 @@ lint: venv
 test: venv
   # We have integration tests for the inmor rust binary
   . .venv/bin/activate && \
-  pytest -vvv
+  pytest -vvv -s
 
 # To format the Rust and Python code
 reformat: venv
