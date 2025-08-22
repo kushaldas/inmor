@@ -26,3 +26,6 @@ jobs:
 
       - name: Build TA appliation
         run: cargo build
+
+      - name: Run tests for inmor
+        run: pytest -vvv
